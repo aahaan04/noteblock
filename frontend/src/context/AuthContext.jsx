@@ -24,31 +24,39 @@ export function AuthProvider({ children }) {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Load profile directly from Supabase — no backend required
+  // Load profile from public.users; create it if the DB trigger missed it
   async function loadProfile(userId) {
     try {
-      const { data, error } = await supabase
+      // First attempt
+      let { data } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
-      setProfile(data);
-    } catch {
-      // Profile may not exist yet right after signup — the DB trigger
-      // creates it asynchronously. Retry once after a short delay.
-      await new Promise(r => setTimeout(r, 1200));
-      try {
-        const { data } = await supabase
+      if (!data) {
+        // Trigger may not have fired — create the row ourselves
+        const { data: { user } } = await supabase.auth.getUser();
+        const meta = user?.user_metadata ?? {};
+        const { data: created } = await supabase
           .from('users')
-          .select('*')
-          .eq('id', userId)
+          .upsert({
+            id: userId,
+            email: user?.email ?? '',
+            display_name: meta.display_name ?? user?.email?.split('@')[0] ?? 'User',
+            role: meta.role ?? 'guest',
+            credits_balance: 0,
+            language: 'en',
+          }, { onConflict: 'id' })
+          .select()
           .single();
-        setProfile(data ?? null);
-      } catch {
-        setProfile(null);
+        data = created;
       }
+
+      setProfile(data ?? null);
+    } catch (e) {
+      console.error('loadProfile error:', e);
+      setProfile(null);
     } finally {
       setLoading(false);
     }
