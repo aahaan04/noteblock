@@ -2,11 +2,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
-import { api } from '../lib/api.js';
+import { supabase } from '../lib/supabase.js';
 import VenueQRCode from '../components/VenueQRCode.jsx';
 
+function makeRoomCode() {
+  return Math.random().toString(36).slice(2, 6).toUpperCase() +
+         Math.random().toString(36).slice(2, 6).toUpperCase();
+}
+
 export default function HostDashboard() {
-  const { profile, token, signOut } = useAuth();
+  const { profile, user, signOut } = useAuth();
   const { t } = useLang();
   const navigate = useNavigate();
 
@@ -15,17 +20,22 @@ export default function HostDashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
   const [expandedQR, setExpandedQR] = useState(null);
 
   useEffect(() => {
-    loadVenues();
-  }, []);
+    if (user) loadVenues();
+  }, [user]);
 
   async function loadVenues() {
-    try {
-      const data = await api.venues.list(token);
-      setVenues(data);
-    } catch {}
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('venues')
+      .select('*')
+      .eq('host_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (!error) setVenues(data ?? []);
     setLoading(false);
   }
 
@@ -33,12 +43,27 @@ export default function HostDashboard() {
     e.preventDefault();
     if (!newName.trim()) return;
     setCreating(true);
-    try {
-      const v = await api.venues.create({ name: newName }, token);
-      setVenues(prev => [v, ...prev]);
+    setCreateError('');
+
+    const { data, error } = await supabase
+      .from('venues')
+      .insert({
+        host_id: user.id,
+        name: newName.trim(),
+        room_code: makeRoomCode(),
+        welcome_credits: 10,
+        crossfade_duration_seconds: 5,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      setCreateError(error.message);
+    } else {
+      setVenues(prev => [data, ...prev]);
       setNewName('');
       setShowCreate(false);
-    } catch {}
+    }
     setCreating(false);
   }
 
@@ -65,10 +90,10 @@ export default function HostDashboard() {
         </div>
       </div>
 
-      {/* Venues */}
+      {/* Venues header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontSize: 20 }}>{t.myVenues}</h2>
-        <button className="btn-primary" onClick={() => setShowCreate(true)}>
+        <button className="btn-primary" onClick={() => { setShowCreate(true); setCreateError(''); }}>
           + {t.createVenue}
         </button>
       </div>
@@ -76,29 +101,32 @@ export default function HostDashboard() {
       {/* Create form */}
       {showCreate && (
         <form onSubmit={createVenue} style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--accent)',
-          borderRadius: 12,
-          padding: 20,
-          marginBottom: 20,
-          display: 'flex',
-          gap: 10,
+          background: 'var(--surface)', border: '1px solid var(--accent)',
+          borderRadius: 12, padding: 20, marginBottom: 20,
+          display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          <input
-            className="input"
-            style={{ flex: 1 }}
-            placeholder={t.venueName}
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            autoFocus
-            required
-          />
-          <button className="btn-primary" type="submit" disabled={creating}>
-            {creating ? t.loading : t.createVenue}
-          </button>
-          <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)}>
-            {t.cancel}
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input
+              className="input"
+              style={{ flex: 1 }}
+              placeholder={t.venueName}
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              autoFocus
+              required
+            />
+            <button className="btn-primary" type="submit" disabled={creating}>
+              {creating ? t.loading : t.createVenue}
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)}>
+              {t.cancel}
+            </button>
+          </div>
+          {createError && (
+            <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>
+              Error: {createError}
+            </p>
+          )}
         </form>
       )}
 
@@ -108,7 +136,9 @@ export default function HostDashboard() {
         <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '3rem 0' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>🏠</div>
           <p>{t.noVenues}</p>
-          <button className="btn-primary" onClick={() => setShowCreate(true)}>+ {t.createVenue}</button>
+          <button className="btn-primary" onClick={() => setShowCreate(true)}>
+            + {t.createVenue}
+          </button>
         </div>
       )}
 
@@ -120,10 +150,7 @@ export default function HostDashboard() {
             onManage={() => navigate(`/host/venue/${venue.id}`)}
             showQR={expandedQR === venue.id}
             onToggleQR={() => setExpandedQR(expandedQR === venue.id ? null : venue.id)}
-            token={token}
-            onStatusChange={(updatedVenue) => {
-              setVenues(prev => prev.map(v => v.id === updatedVenue.id ? updatedVenue : v));
-            }}
+            onStatusChange={updated => setVenues(prev => prev.map(v => v.id === updated.id ? updated : v))}
           />
         ))}
       </div>
@@ -131,23 +158,27 @@ export default function HostDashboard() {
   );
 }
 
-function VenueCard({ venue, onManage, showQR, onToggleQR, token, onStatusChange }) {
+function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange }) {
   const { t } = useLang();
+  const [toggling, setToggling] = useState(false);
 
-  const toggleStatus = async () => {
+  async function toggleStatus() {
+    setToggling(true);
     const newStatus = venue.status === 'active' ? 'closed' : 'active';
-    try {
-      const updated = await api.venues.update(venue.id, { status: newStatus }, token);
-      onStatusChange(updated);
-    } catch {}
-  };
+    const { data } = await supabase
+      .from('venues')
+      .update({ status: newStatus })
+      .eq('id', venue.id)
+      .select()
+      .single();
+    if (data) onStatusChange(data);
+    setToggling(false);
+  }
 
   return (
     <div style={{
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 14,
-      padding: 20,
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderRadius: 14, padding: 20,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -156,8 +187,7 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, token, onStatusChange 
               {venue.name}
             </h3>
             <span style={{
-              fontSize: 11, fontWeight: 700,
-              padding: '2px 8px', borderRadius: 999,
+              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0,
               background: venue.status === 'active' ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)',
               color: venue.status === 'active' ? '#34d399' : '#f87171',
             }}>
@@ -173,7 +203,7 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, token, onStatusChange 
           <button className="btn-secondary" style={{ fontSize: 12 }} onClick={onToggleQR}>
             QR {showQR ? '▲' : '▼'}
           </button>
-          <button className="btn-secondary" style={{ fontSize: 12 }} onClick={toggleStatus}>
+          <button className="btn-secondary" style={{ fontSize: 12 }} onClick={toggleStatus} disabled={toggling}>
             {venue.status === 'active' ? t.closeRoom : t.openRoomAction}
           </button>
           <button className="btn-primary" style={{ fontSize: 12 }} onClick={onManage}>
