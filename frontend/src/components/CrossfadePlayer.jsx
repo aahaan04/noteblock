@@ -22,6 +22,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   ref
 ) {
   const [ytReady, setYtReady] = useState(false);
+  const [playersReady, setPlayersReady] = useState(false); // true only after YT.Player instances exist
   const [displayActive, setDisplayActive] = useState('A'); // which iframe is visible
 
   // Player refs
@@ -224,7 +225,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   const pollRef = useRef(null);
 
   useEffect(() => {
-    if (!ytReady) return;
+    if (!playersReady) return;
     pollRef.current = setInterval(() => {
       if (S.current.crossfading || S.current.mode === 'idle') return;
       const player = getActive();
@@ -242,12 +243,12 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       } catch {}
     }, POLL_MS);
     return () => clearInterval(pollRef.current);
-  }, [ytReady]);
+  }, [playersReady]);
 
   // ── watch queue/vibe changes ──────────────────────────────────────────────
 
   useEffect(() => {
-    if (!ytReady) return;
+    if (!playersReady) return;
 
     const { mode, crossfading } = S.current;
     const pendingItems = queue.filter(i => i.status === 'pending');
@@ -278,7 +279,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
         preloadInto(getInactive(), next);
       }
     }
-  }, [queue, vibeEnabled, vibeVideos, ytReady]);
+  }, [queue, vibeEnabled, vibeVideos, playersReady]);
 
   // ── handle song naturally ending ──────────────────────────────────────────
 
@@ -388,8 +389,10 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
 
     pA.current = makePlayer('yt-player-a', 'A');
     pB.current = makePlayer('yt-player-b', 'B');
+    setPlayersReady(true); // fires queue/poll effects only after players exist
 
     return () => {
+      setPlayersReady(false);
       clearInterval(fadeRef.current);
       try { pA.current?.destroy(); } catch {}
       try { pB.current?.destroy(); } catch {}

@@ -124,6 +124,7 @@ export default function GuestRoom() {
       setSessionHistory(prev => [{ ...selected, playType, credits: result.credits_charged }, ...prev]);
       showToast(t.songAddedToQueue);
       setSelected(null);
+      loadQueue(venue.id); // refresh immediately, don't wait for real-time
     } catch (err) {
       const msg = err.data?.error;
       if (msg === 'insufficient_credits') showToast(t.insufficientCredits);
