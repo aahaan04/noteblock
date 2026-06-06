@@ -367,6 +367,7 @@ function UsersPanel({ venueId, token }) {
   const [users, setUsers] = useState([]);
   const [bannedUsers, setBannedUsers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]); // from Supabase Presence
+  const [removedNames, setRemovedNames] = useState(new Set()); // hidden until they rejoin
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState(null); // { type: 'ban'|'gift'|'remove', user }
@@ -437,10 +438,16 @@ function UsersPanel({ venueId, token }) {
     setModal(null); load();
   }
   async function handleRemove(name) {
-    await api.venues.removeUser(venueId, name, token).catch(() => {});
-    // Optimistically remove from local state; real-time subscription will re-sync
-    setUsers(prev => prev.filter(u => u.name !== name));
-    setModal(null);
+    try {
+      await api.venues.removeUser(venueId, name, token);
+      // Add to removedNames — filters them from both historical and presence lists
+      setRemovedNames(prev => new Set([...prev, name]));
+      setModal(null);
+    } catch (err) {
+      setGiftMsg('Remove failed: ' + (err.data?.error ?? err.message ?? 'unknown error'));
+      setModal(null);
+      setTimeout(() => setGiftMsg(''), 3000);
+    }
   }
   async function handleGift(name) {
     try {
@@ -453,18 +460,27 @@ function UsersPanel({ venueId, token }) {
     }
   }
 
-  // Merge online presence users with historical requesters
-  // onlineNames: Set of names currently in the room (from presence)
-  const onlineNames = new Set(onlineUsers.map(u => u.name));
+  // When a removed user makes a new request, clear them from removedNames so they reappear
+  useEffect(() => {
+    if (!removedNames.size) return;
+    const newRequesters = new Set(users.map(u => u.name));
+    const rejoinedNames = [...removedNames].filter(n => newRequesters.has(n));
+    if (rejoinedNames.length) {
+      setRemovedNames(prev => { const next = new Set(prev); rejoinedNames.forEach(n => next.delete(n)); return next; });
+    }
+  }, [users]); // eslint-disable-line
 
-  // Build combined list: start with historical users (have requests), then add
-  // online-only users (in room but haven't requested yet), skipping duplicates
+  // Merge online presence users with historical requesters
+  // Filter out removed users from both sources
+  const onlineNames = new Set(onlineUsers.map(u => u.name));
   const historicalNames = new Set(users.map(u => u.name));
+
+  const visibleUsers = users.filter(u => !removedNames.has(u.name));
   const onlineOnly = onlineUsers
-    .filter(p => !historicalNames.has(p.name))
+    .filter(p => !historicalNames.has(p.name) && !removedNames.has(p.name))
     .map(p => ({ name: p.name, requests: 0, credits: 0, isRegistered: p.isRegistered, banned: false, onlineOnly: true }));
 
-  const allUsers = [...users, ...onlineOnly];
+  const allUsers = [...visibleUsers, ...onlineOnly];
   const displayed = filter === 'banned' ? allUsers.filter(u => u.banned) : allUsers;
 
   if (loading) return <p style={{ color: '#8B6F52' }}>Loading users…</p>;

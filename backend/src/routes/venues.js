@@ -235,13 +235,14 @@ router.delete('/:id/users/:name', requireAuth, async (req, res) => {
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
   const name = decodeURIComponent(req.params.name);
-  // Delete all their items except currently-playing (don't interrupt playback)
+  // Mark their items 'removed' so GET /users (which queries pending/playing/played)
+  // no longer includes them. Avoids RLS-blocked DELETEs and preserves audit trail.
   const { error } = await supabaseAdmin
     .from('queue_items')
-    .delete()
+    .update({ status: 'removed' })
     .eq('venue_id', req.params.id)
     .eq('requester_name', name)
-    .neq('status', 'playing');
+    .in('status', ['pending', 'played']); // leave 'playing' alone
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
