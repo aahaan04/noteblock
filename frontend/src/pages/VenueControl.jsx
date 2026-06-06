@@ -367,7 +367,13 @@ function UsersPanel({ venueId, token }) {
   const [users, setUsers] = useState([]);
   const [bannedUsers, setBannedUsers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]); // from Supabase Presence
-  const [removedNames, setRemovedNames] = useState(new Set()); // hidden until they rejoin
+  const [removedNames, setRemovedNames] = useState(() => {
+    // Load from localStorage so removals persist across host page refreshes
+    try {
+      const saved = JSON.parse(localStorage.getItem(`nb_removed_${venueId}`) ?? '[]');
+      return new Set(saved);
+    } catch { return new Set(); }
+  });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState(null); // { type: 'ban'|'gift'|'remove', user }
@@ -437,17 +443,23 @@ function UsersPanel({ venueId, token }) {
     await api.venues.unbanUser(venueId, record.id, token).catch(() => {});
     setModal(null); load();
   }
-  async function handleRemove(name) {
+  function persistRemove(name) {
+    // Write to localStorage immediately — this is what makes it survive page refreshes
     try {
-      await api.venues.removeUser(venueId, name, token);
-      // Add to removedNames — filters them from both historical and presence lists
-      setRemovedNames(prev => new Set([...prev, name]));
-      setModal(null);
-    } catch (err) {
-      setGiftMsg('Remove failed: ' + (err.data?.error ?? err.message ?? 'unknown error'));
-      setModal(null);
-      setTimeout(() => setGiftMsg(''), 3000);
-    }
+      const key = `nb_removed_${venueId}`;
+      const saved = JSON.parse(localStorage.getItem(key) ?? '[]');
+      const updated = [...new Set([...saved, name])];
+      localStorage.setItem(key, JSON.stringify(updated));
+    } catch {}
+    setRemovedNames(prev => new Set([...prev, name]));
+  }
+
+  async function handleRemove(name) {
+    // Always persist locally first — works even if the backend call fails
+    persistRemove(name);
+    setModal(null);
+    // Best-effort backend update (marks queue_items as 'removed' status)
+    api.venues.removeUser(venueId, name, token).catch(() => {});
   }
   async function handleGift(name) {
     try {
@@ -460,14 +472,19 @@ function UsersPanel({ venueId, token }) {
     }
   }
 
-  // When a removed user makes a new request, clear them from removedNames so they reappear
+  // When a removed user makes a new song request, clear them so they reappear
   useEffect(() => {
     if (!removedNames.size) return;
-    const newRequesters = new Set(users.map(u => u.name));
-    const rejoinedNames = [...removedNames].filter(n => newRequesters.has(n));
-    if (rejoinedNames.length) {
-      setRemovedNames(prev => { const next = new Set(prev); rejoinedNames.forEach(n => next.delete(n)); return next; });
-    }
+    const currentRequesters = new Set(users.map(u => u.name));
+    const rejoinedNames = [...removedNames].filter(n => currentRequesters.has(n));
+    if (!rejoinedNames.length) return;
+    // Clear from state and localStorage
+    setRemovedNames(prev => { const next = new Set(prev); rejoinedNames.forEach(n => next.delete(n)); return next; });
+    try {
+      const key = `nb_removed_${venueId}`;
+      const saved = JSON.parse(localStorage.getItem(key) ?? '[]');
+      localStorage.setItem(key, JSON.stringify(saved.filter(n => !rejoinedNames.includes(n))));
+    } catch {}
   }, [users]); // eslint-disable-line
 
   // Merge online presence users with historical requesters
