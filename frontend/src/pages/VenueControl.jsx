@@ -5,6 +5,10 @@ import {
   Ban, Users, BarChart2, QrCode, RefreshCw, MoreHorizontal,
   Gift, Check, X, ChevronUp, ChevronDown, Save,
 } from 'lucide-react';
+
+const Logo = ({ size = 20 }) => (
+  <img src="/logo.png" alt="Noteblock" style={{ width: size, height: size, imageRendering: 'pixelated' }} />
+);
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { api } from '../lib/api.js';
@@ -129,7 +133,7 @@ export default function VenueControl() {
         <button onClick={() => navigate('/host/dashboard')} style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
           <ArrowLeft size={20} />
         </button>
-        <Music size={18} color="#FF6B35" />
+        <Logo size={26} />
         <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, flex: 1, color: '#F0E6D3' }}>{venue.name}</h1>
         <span style={{
           fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999,

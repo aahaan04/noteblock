@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sliders, Music, ArrowLeft, AlertTriangle } from 'lucide-react';
+
+const Logo = ({ size = 48 }) => (
+  <img src="/logo.png" alt="Noteblock" style={{ width: size, height: size, imageRendering: 'pixelated' }} />
+);
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 
@@ -51,7 +55,7 @@ export default function Landing() {
       <div className="center-screen">
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ marginBottom: 12 }}>
-            <Music size={52} color="#FF6B35" />
+            <Logo size={72} />
           </div>
           <h1 style={{ fontSize: 36, fontWeight: 900, margin: 0, color: '#FF6B35', letterSpacing: '-0.5px' }}>
             {t.appName}
@@ -89,7 +93,7 @@ export default function Landing() {
         </button>
 
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          {isHost ? <Sliders size={32} color="#FF6B35" /> : <Music size={32} color="#FF6B35" />}
+          {isHost ? <Sliders size={32} color="#FF6B35" /> : <Logo size={40} />}
           <h2 style={{ margin: '8px 0 4px', color: '#F0E6D3' }}>{isHost ? t.iAmHost : t.iAmGuest}</h2>
           <p style={{ color: '#8B6F52', fontSize: 13 }}>{isHost ? t.hostNote : t.guestNote}</p>
         </div>

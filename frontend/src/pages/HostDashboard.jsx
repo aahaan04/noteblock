@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Settings, LogOut, Plus, QrCode, ChevronUp, ChevronDown, Home } from 'lucide-react';
+import { Settings, LogOut, Plus, QrCode, ChevronUp, ChevronDown, Home } from 'lucide-react';
+
+const Logo = ({ size = 26 }) => (
+  <img src="/logo.png" alt="Noteblock" style={{ width: size, height: size, imageRendering: 'pixelated' }} />
+);
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -58,7 +62,7 @@ export default function HostDashboard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Music size={26} color="#FF6B35" />
+            <Logo size={32} />
             <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: '#F0E6D3' }}>Noteblock</h1>
           </div>
           <p style={{ margin: '4px 0 0', color: '#8B6F52', fontSize: 14 }}>{profile?.display_name}</p>

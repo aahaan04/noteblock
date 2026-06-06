@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Settings, LogOut, ArrowRight, Coins } from 'lucide-react';
+import { Settings, LogOut, ArrowRight, Coins } from 'lucide-react';
+
+const Logo = ({ size = 24 }) => (
+  <img src="/logo.png" alt="Noteblock" style={{ width: size, height: size, imageRendering: 'pixelated' }} />
+);
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { api } from '../lib/api.js';
@@ -26,7 +30,7 @@ export default function GuestHome() {
     <div style={{ maxWidth: 480, margin: '0 auto', padding: '32px 16px', minHeight: '100vh', background: '#0E0A07' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
-        <Music size={24} color="#FF6B35" />
+        <Logo size={30} />
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, flex: 1, color: '#F0E6D3' }}>Noteblock</h1>
         {token ? (
           <button className="btn-secondary" style={{ fontSize: 12 }} onClick={signOut}>

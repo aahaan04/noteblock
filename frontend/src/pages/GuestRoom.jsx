@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Search, ListMusic, Clock, Music, Pause } from 'lucide-react';
+
+const Logo = ({ size = 16 }) => (
+  <img src="/logo.png" alt="Noteblock" style={{ width: size, height: size, imageRendering: 'pixelated' }} />
+);
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { api } from '../lib/api.js';
@@ -134,7 +138,7 @@ export default function GuestRoom() {
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3', display: 'flex', alignItems: 'center', gap: 7 }}>
-            <Music size={16} color="#FF6B35" /> {venue.name}
+            <Logo size={20} /> {venue.name}
           </div>
           {vibeActive && (
             <div style={{ fontSize: 11, color: '#FF6B35', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
