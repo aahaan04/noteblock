@@ -13,6 +13,9 @@ export default function GuestJoin() {
   const [venue, setVenue] = useState(null);
   const [error, setError] = useState('');
   const [langChosen, setLangChosen] = useState(false);
+  const [displayName, setDisplayName] = useState(
+    () => profile?.display_name || localStorage.getItem('nb_guest_name') || ''
+  );
 
   useEffect(() => {
     loadVenue();
@@ -34,19 +37,23 @@ export default function GuestJoin() {
   async function proceed() {
     if (!venue) return;
 
+    // Save display name to localStorage (used as requester_name in room)
+    const name = displayName.trim() || 'Guest';
+    localStorage.setItem('nb_guest_name', name);
+
     // Grant welcome credits for logged-in guests
     if (token && profile?.role !== 'host') {
       await api.users.welcome(venue.id, token).catch(() => {});
       await refreshProfile(); // sync updated credits_balance into auth context
     }
 
-    // Anonymous: give session credits
+    // Anonymous: give welcome credits once per device per room
     if (!token) {
-      const key = `nb_session_credits_${venue.id}`;
-      if (!sessionStorage.getItem(key)) {
+      const creditKey = `nb_credits_granted_${venue.id}`;
+      if (!localStorage.getItem(creditKey)) {
         const existing = parseInt(localStorage.getItem('nb_anon_credits') ?? '0');
         localStorage.setItem('nb_anon_credits', String(existing + (venue.welcome_credits ?? 10)));
-        sessionStorage.setItem(key, '1');
+        localStorage.setItem(creditKey, '1');
       }
     }
 
@@ -107,6 +114,25 @@ export default function GuestJoin() {
             🎁 You'll receive <strong>{venue.welcome_credits} free credits</strong> to request songs!
           </div>
         )}
+
+        {/* Display name */}
+        <div style={{ marginBottom: 16, textAlign: 'left' }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+            👤 Your name <span style={{ fontWeight: 400 }}>(shown when you request songs)</span>
+          </label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            placeholder="Enter a nickname…"
+            maxLength={32}
+            style={{
+              width: '100%', padding: '10px 14px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'var(--surface)',
+              color: 'var(--text)', fontSize: 14, boxSizing: 'border-box',
+            }}
+          />
+        </div>
 
         <button className="btn-primary" style={{ width: '100%', padding: 16, fontSize: 16, marginBottom: 12 }} onClick={proceed}>
           {t.joinVenue} →

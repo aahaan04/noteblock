@@ -109,7 +109,7 @@ export default function GuestRoom() {
       return;
     }
 
-    const requesterName = profile?.display_name ?? 'Guest';
+    const requesterName = profile?.display_name ?? localStorage.getItem('nb_guest_name') ?? 'Guest';
 
     try {
       const result = await api.queue.add(venue.id, {
