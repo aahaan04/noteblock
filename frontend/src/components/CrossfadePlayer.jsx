@@ -208,7 +208,6 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       if (next) {
         doCrossfade(next);
       } else {
-        // Nothing next — just stop
         try { getActive()?.stopVideo(); } catch {}
         if (prev?.type === 'requested') onMarkPlayed?.(prev.item.id);
         S.current.current = null;
@@ -218,6 +217,13 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
         onVibeActive?.(false);
       }
     },
+    // Call this from a click handler so the browser allows autoplay
+    start() {
+      if (S.current.mode !== 'idle') return;
+      const next = getNextRequested() ?? getNextVibe(null);
+      if (next) startEntry(next);
+    },
+    get isIdle() { return S.current.mode === 'idle'; },
   }));
 
   // ── poll: trigger crossfade when near end ─────────────────────────────────

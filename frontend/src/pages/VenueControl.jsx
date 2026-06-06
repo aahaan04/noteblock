@@ -212,9 +212,20 @@ export default function VenueControl() {
           <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
 
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn-primary" style={{ flex: 1, fontSize: 14 }} onClick={handleSkip}>
-              ⏭ {t.skip}
-            </button>
+            {!nowPlaying && pendingQueue.length > 0 && (
+              <button
+                className="btn-primary"
+                style={{ flex: 1, fontSize: 14, background: '#22c55e' }}
+                onClick={() => playerRef.current?.start()}
+              >
+                ▶ Start Player
+              </button>
+            )}
+            {nowPlaying && (
+              <button className="btn-primary" style={{ flex: 1, fontSize: 14 }} onClick={handleSkip}>
+                ⏭ {t.skip}
+              </button>
+            )}
           </div>
         </div>
 
