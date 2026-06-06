@@ -28,6 +28,7 @@ export default function VenueControl() {
   const [tab, setTab] = useState('player');
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [skipping, setSkipping] = useState(false);
 
   // ── Load venue + queue ───────────────────────────────────────────────────
 
@@ -133,8 +134,11 @@ export default function VenueControl() {
 
   // ── Host controls ─────────────────────────────────────────────────────────
 
-  async function handleSkip() {
+  function handleSkip() {
+    if (skipping) return;
+    setSkipping(true);
     playerRef.current?.skip();
+    setTimeout(() => setSkipping(false), 2500);
   }
 
   async function handleRemove(itemId) {
@@ -222,8 +226,8 @@ export default function VenueControl() {
               </button>
             )}
             {nowPlaying && (
-              <button className="btn-primary" style={{ flex: 1, fontSize: 14 }} onClick={handleSkip}>
-                ⏭ {t.skip}
+              <button className="btn-primary" style={{ flex: 1, fontSize: 14, opacity: skipping ? 0.5 : 1 }} onClick={handleSkip} disabled={skipping}>
+                ⏭ {skipping ? 'Skipping…' : t.skip}
               </button>
             )}
           </div>

@@ -379,13 +379,20 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   useEffect(() => {
     if (!ytReady) return;
 
+    let readyCount = 0;
+    const onPlayerReady = () => {
+      readyCount++;
+      if (readyCount >= 2) setPlayersReady(true); // both players initialised
+    };
+
     const makePlayer = (elementId, playerName) =>
       new window.YT.Player(elementId, {
         playerVars: {
-          autoplay: 0, controls: 0, modestbranding: 1,
+          autoplay: 0, controls: 1, modestbranding: 1,
           rel: 0, playsinline: 1, enablejsapi: 1, fs: 1,
         },
         events: {
+          onReady: onPlayerReady,
           onStateChange: (e) => {
             if (e.data === window.YT.PlayerState.ENDED) handleEnded(playerName);
           },
@@ -395,10 +402,10 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
 
     pA.current = makePlayer('yt-player-a', 'A');
     pB.current = makePlayer('yt-player-b', 'B');
-    setPlayersReady(true); // fires queue/poll effects only after players exist
 
     return () => {
       setPlayersReady(false);
+      readyCount = 0;
       clearInterval(fadeRef.current);
       try { pA.current?.destroy(); } catch {}
       try { pB.current?.destroy(); } catch {}
@@ -407,33 +414,41 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
 
   // ── render ────────────────────────────────────────────────────────────────
 
+  const isIdle = S.current.mode === 'idle';
+
   return (
-    <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
+    <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#111', borderRadius: 12, overflow: 'hidden' }}>
+      {/* Player A */}
       <div
         id="yt-player-a"
         style={{
           position: 'absolute', inset: 0,
-          opacity: displayActive === 'A' ? 1 : 0,
+          opacity: displayActive === 'A' && !isIdle ? 1 : 0,
           transition: `opacity ${crossfadeSecs}s linear`,
           pointerEvents: displayActive === 'A' ? 'auto' : 'none',
         }}
       />
+      {/* Player B */}
       <div
         id="yt-player-b"
         style={{
           position: 'absolute', inset: 0,
-          opacity: displayActive === 'B' ? 1 : 0,
+          opacity: displayActive === 'B' && !isIdle ? 1 : 0,
           transition: `opacity ${crossfadeSecs}s linear`,
           pointerEvents: displayActive === 'B' ? 'auto' : 'none',
         }}
       />
-      {!ytReady && (
+      {/* Overlay: loading or idle */}
+      {(!ytReady || isIdle) && (
         <div style={{
           position: 'absolute', inset: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#aaa', fontSize: 14,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          gap: 8, color: '#666', fontSize: 13,
+          background: '#111',
         }}>
-          Loading player…
+          <span style={{ fontSize: 32 }}>🎵</span>
+          <span>{!ytReady ? 'Loading player…' : 'No song playing'}</span>
         </div>
       )}
     </div>
