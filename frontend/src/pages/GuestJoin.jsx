@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Music, Globe, AlertTriangle, User, ArrowRight } from 'lucide-react';
+import { Music, Globe, AlertTriangle, User, ArrowRight, Coins, Edit2 } from 'lucide-react';
+import Logo from '../components/Logo.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { api } from '../lib/api.js';
@@ -14,6 +15,7 @@ export default function GuestJoin() {
   const [venue, setVenue] = useState(null);
   const [error, setError] = useState('');
   const [langChosen, setLangChosen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
   const [displayName, setDisplayName] = useState(
     () => profile?.display_name || localStorage.getItem('nb_guest_name') || ''
   );
@@ -28,9 +30,9 @@ export default function GuestJoin() {
     } catch { setError('Room not found.'); }
   }
 
-  async function proceed() {
+  async function proceed(nameOverride) {
     if (!venue) return;
-    const name = displayName.trim() || 'Guest';
+    const name = (nameOverride ?? displayName).trim() || 'Guest';
     localStorage.setItem('nb_guest_name', name);
 
     if (token && profile?.role !== 'host') {
@@ -62,7 +64,7 @@ export default function GuestJoin() {
 
   if (!venue) return <div className="center-screen"><p style={{ color: '#8B6F52' }}>{t.loading}</p></div>;
 
-  // Language selection
+  // Language selection — only prompt if they haven't chosen yet
   if (!langChosen && !localStorage.getItem('nb_lang')) {
     return (
       <div className="center-screen">
@@ -82,6 +84,60 @@ export default function GuestJoin() {
     );
   }
 
+  // ── Returning anonymous guest — show a fast-path "Welcome back" screen ────────
+  // Only check nb_guest_name (not the venue credit key — iOS Safari wipes it after 7d inactivity)
+  const savedName = localStorage.getItem('nb_guest_name');
+  const alreadyJoined = !token && !!savedName;
+  const savedCredits = parseInt(localStorage.getItem('nb_anon_credits') ?? '0');
+
+  if (alreadyJoined && !editingName) {
+    return (
+      <div className="center-screen">
+        <div style={{ textAlign: 'center', maxWidth: 340 }}>
+          <Logo size={48} style={{ margin: '0 auto 16px' }} />
+          <p style={{ color: '#8B6F52', margin: '0 0 2px', fontSize: 13 }}>{t.welcomeTo}</p>
+          <h1 style={{ margin: '0 0 24px', fontSize: 26, fontWeight: 900, color: '#F0E6D3' }}>{venue.name}</h1>
+
+          {/* Welcome back card */}
+          <div style={{
+            background: 'rgba(255,107,53,0.06)',
+            border: '1px solid rgba(255,107,53,0.25)',
+            borderRadius: 12,
+            padding: '20px 24px',
+            marginBottom: 20,
+            textAlign: 'left',
+          }}>
+            <p style={{ margin: '0 0 4px', fontSize: 13, color: '#8B6F52' }}>Welcome back</p>
+            <p style={{ margin: '0 0 14px', fontSize: 22, fontWeight: 800, color: '#F0E6D3' }}>{savedName}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: '#C89B6E', fontWeight: 600 }}>
+              <Coins size={16} color="#C89B6E" />
+              {savedCredits} credits available
+            </div>
+          </div>
+
+          <button
+            className="btn-primary"
+            style={{ width: '100%', padding: 16, fontSize: 16, marginBottom: 12 }}
+            onClick={() => proceed(savedName)}
+          >
+            Rejoin {venue.name} <ArrowRight size={18} />
+          </button>
+
+          <button
+            style={{
+              background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer',
+              fontSize: 13, display: 'flex', alignItems: 'center', gap: 5, margin: '0 auto',
+            }}
+            onClick={() => setEditingName(true)}
+          >
+            <Edit2 size={13} /> Change name or join fresh
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── First-time or name-change flow ────────────────────────────────────────────
   return (
     <div className="center-screen">
       <div style={{ textAlign: 'center', maxWidth: 340 }}>
@@ -89,7 +145,8 @@ export default function GuestJoin() {
         <p style={{ color: '#8B6F52', margin: '0 0 4px' }}>{t.welcomeTo}</p>
         <h1 style={{ margin: '0 0 24px', fontSize: 28, fontWeight: 900, color: '#F0E6D3' }}>{venue.name}</h1>
 
-        {venue.welcome_credits > 0 && (
+        {/* Only show free credits banner for first-time visitors to this room */}
+        {venue.welcome_credits > 0 && !alreadyJoined && !token && (
           <div style={{
             background: 'rgba(255,107,53,0.08)',
             border: '1px solid rgba(255,107,53,0.3)',
@@ -103,7 +160,7 @@ export default function GuestJoin() {
 
         {/* Display name */}
         <div style={{ marginBottom: 16, textAlign: 'left' }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#8B6F52', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#8B6F52', marginBottom: 6 }}>
             <User size={13} /> Your name <span style={{ fontWeight: 400 }}>(shown when you request songs)</span>
           </label>
           <input
@@ -113,12 +170,22 @@ export default function GuestJoin() {
             placeholder="Enter a nickname…"
             maxLength={32}
             className="input"
+            autoFocus={editingName}
           />
         </div>
 
-        <button className="btn-primary" style={{ width: '100%', padding: 16, fontSize: 16, marginBottom: 12 }} onClick={proceed}>
+        <button className="btn-primary" style={{ width: '100%', padding: 16, fontSize: 16, marginBottom: 12 }} onClick={() => proceed()}>
           {t.joinVenue} <ArrowRight size={18} />
         </button>
+
+        {editingName && (
+          <button
+            style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', fontSize: 13, marginBottom: 12 }}
+            onClick={() => setEditingName(false)}
+          >
+            ← Back
+          </button>
+        )}
 
         {!token && (
           <p style={{ fontSize: 12, color: '#8B6F52', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>

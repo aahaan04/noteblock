@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Music, Play, Pause, SkipForward, ListMusic, Radio,
   Ban, Users, BarChart2, QrCode, RefreshCw, MoreHorizontal,
-  Gift, Check, X, ChevronUp, ChevronDown, Save,
+  Gift, Check, X, ChevronUp, ChevronDown, Save, AlertTriangle,
 } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -384,6 +384,21 @@ function UsersPanel({ venueId, token }) {
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
+  // Real-time: reload whenever someone new requests a song in this room
+  useEffect(() => {
+    if (!venueId) return;
+    const sub = supabase
+      .channel(`users-panel-${venueId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'queue_items',
+        filter: `venue_id=eq.${venueId}`,
+      }, () => load())
+      .subscribe();
+    return () => supabase.removeChannel(sub);
+  }, [venueId]);
+
   useEffect(() => {
     if (!openMenu) return;
     const close = () => setOpenMenu(null);
@@ -401,12 +416,21 @@ function UsersPanel({ venueId, token }) {
     await api.venues.unbanUser(venueId, record.id, token).catch(() => {});
     setModal(null); load();
   }
+  async function handleRemove(name) {
+    await api.venues.removeUser(venueId, name, token).catch(() => {});
+    // Optimistically remove from local state; real-time subscription will re-sync
+    setUsers(prev => prev.filter(u => u.name !== name));
+    setModal(null);
+  }
   async function handleGift(name) {
     try {
       await api.venues.gift(venueId, { guest_identifier: name, amount: giftAmount }, token);
-      setGiftMsg(`${giftAmount} credits gifted to ${name}`);
-      setTimeout(() => { setGiftMsg(''); setModal(null); }, 2000);
-    } catch (err) { setGiftMsg('Failed: ' + (err.data?.error ?? 'error')); }
+      setGiftMsg(`✓ ${giftAmount} credits sent to ${name}`);
+      setTimeout(() => { setGiftMsg(''); setModal(null); }, 2500);
+    } catch (err) {
+      const msg = err.data?.message ?? err.data?.error ?? 'error';
+      setGiftMsg(`Failed: ${msg}`);
+    }
   }
 
   const displayed = filter === 'banned' ? users.filter(u => u.banned) : users;
@@ -443,7 +467,7 @@ function UsersPanel({ venueId, token }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {displayed.map(u => {
-          const named = u.name && u.name !== 'Guest';
+          const initial = u.name && u.name !== 'Guest' ? u.name[0].toUpperCase() : '?';
           return (
             <div key={u.name} style={{
               display: 'flex', alignItems: 'center', gap: 12,
@@ -454,12 +478,12 @@ function UsersPanel({ venueId, token }) {
               {/* Avatar */}
               <div style={{
                 width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                background: u.banned ? 'rgba(248,113,113,0.15)' : named ? 'rgba(255,107,53,0.15)' : 'rgba(90,69,53,0.3)',
+                background: u.banned ? 'rgba(248,113,113,0.15)' : u.isRegistered ? 'rgba(255,107,53,0.15)' : 'rgba(90,69,53,0.3)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 15, fontWeight: 700,
-                color: u.banned ? '#f87171' : named ? '#FF6B35' : '#8B6F52',
+                color: u.banned ? '#f87171' : u.isRegistered ? '#FF6B35' : '#8B6F52',
               }}>
-                {u.banned ? <Ban size={16} /> : named ? u.name[0].toUpperCase() : '?'}
+                {u.banned ? <Ban size={16} /> : initial}
               </div>
 
               {/* Info */}
@@ -470,10 +494,10 @@ function UsersPanel({ venueId, token }) {
                   </span>
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999,
-                    background: named ? 'rgba(255,107,53,0.15)' : 'rgba(90,69,53,0.25)',
-                    color: named ? '#FF6B35' : '#8B6F52',
+                    background: u.isRegistered ? 'rgba(255,107,53,0.15)' : 'rgba(90,69,53,0.25)',
+                    color: u.isRegistered ? '#FF6B35' : '#8B6F52',
                   }}>
-                    {named ? 'User' : 'Guest'}
+                    {u.isRegistered ? 'Signed In' : 'Guest'}
                   </span>
                   {u.banned && (
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, background: 'rgba(248,113,113,0.2)', color: '#f87171' }}>
@@ -509,6 +533,8 @@ function UsersPanel({ venueId, token }) {
                   }}>
                     <MenuBtn icon={<Gift size={14} />} label="Gift Credits" color="#C89B6E"
                       onClick={() => { setOpenMenu(null); setGiftAmount(10); setGiftMsg(''); setModal({ type: 'gift', user: u }); }} />
+                    <MenuBtn icon={<X size={14} />} label="Remove from Room" color="#8B6F52"
+                      onClick={() => { setOpenMenu(null); setModal({ type: 'remove', user: u }); }} />
                     {u.banned
                       ? <MenuBtn icon={<Check size={14} />} label="Unban User" color="#34d399" onClick={() => { setOpenMenu(null); handleUnban(u.name); }} />
                       : <MenuBtn icon={<Ban size={14} />} label="Ban User" color="#f87171" onClick={() => { setOpenMenu(null); setModal({ type: 'ban', user: u }); }} />
@@ -520,6 +546,22 @@ function UsersPanel({ venueId, token }) {
           );
         })}
       </div>
+
+      {/* Remove modal */}
+      {modal?.type === 'remove' && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,10,7,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+          <div style={{ background: '#120C06', border: '1px solid #2A1F17', borderRadius: 10, padding: 24, maxWidth: 340, width: '100%' }}>
+            <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 16, color: '#F0E6D3' }}>Remove "{modal.user.name}"?</p>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: '#8B6F52' }}>Their pending song requests will be removed. They can still rejoin and request songs again.</p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn-secondary" style={{ flex: 1, borderColor: '#8B6F52' }} onClick={() => handleRemove(modal.user.name)}>
+                <X size={15} /> Remove
+              </button>
+              <button className="btn-secondary" onClick={() => setModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Ban modal */}
       {modal?.type === 'ban' && (
@@ -544,7 +586,12 @@ function UsersPanel({ venueId, token }) {
             <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 16, color: '#F0E6D3', display: 'flex', alignItems: 'center', gap: 8 }}>
               <Gift size={18} color="#C89B6E" /> Gift Credits
             </p>
-            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#8B6F52' }}>To: {modal.user.name}</p>
+            <p style={{ margin: '0 0 8px', fontSize: 13, color: '#8B6F52' }}>To: <strong style={{ color: '#F0E6D3' }}>{modal.user.name}</strong></p>
+            {!modal.user.isRegistered && (
+              <p style={{ margin: '0 0 12px', fontSize: 11, color: '#C89B6E', display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(200,155,110,0.08)', border: '1px solid rgba(200,155,110,0.2)', borderRadius: 7, padding: '8px 10px' }}>
+                <AlertTriangle size={11} /> This user appears to be a guest. Gifted credits only land in accounts — ask them to sign in first if they want to receive them.
+              </p>
+            )}
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               {[5, 10, 20, 50].map(amt => (
                 <button key={amt} onClick={() => setGiftAmount(amt)} style={{

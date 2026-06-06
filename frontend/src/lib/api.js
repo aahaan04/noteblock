@@ -32,6 +32,7 @@ export const api = {
     },
     gift: (venueId, body, t) => post(`/api/venues/${venueId}/gift`, body, t),
     users: (venueId, t) => get(`/api/venues/${venueId}/users`, t),
+    removeUser: (venueId, name, t) => del(`/api/venues/${venueId}/users/${encodeURIComponent(name)}`, t),
     banUser: (venueId, body, t) => post(`/api/venues/${venueId}/banned-users`, body, t),
     unbanUser: (venueId, bannedUserId, t) => del(`/api/venues/${venueId}/banned-users/${bannedUserId}`, t),
   },

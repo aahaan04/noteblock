@@ -147,23 +147,38 @@ router.delete('/:id/banned/:songId', requireAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-// POST /api/venues/:id/gift — gift credits (host only)
+// POST /api/venues/:id/gift — gift credits to a signed-in user (host only)
 router.post('/:id/gift', requireAuth, async (req, res) => {
   const { guest_identifier, amount } = req.body;
   if (!guest_identifier || !amount) {
     return res.status(400).json({ error: 'guest_identifier and amount required' });
   }
 
-  const { data, error } = await supabaseAdmin.rpc('gift_credits', {
-    p_host_id: req.user.id,
-    p_guest_identifier: guest_identifier,
-    p_amount: amount,
-    p_venue_id: req.params.id,
-  });
+  // Verify host owns this venue
+  const { data: venue } = await supabaseAdmin
+    .from('venues').select('id')
+    .eq('id', req.params.id).eq('host_id', req.user.id).single();
+  if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
-  if (error) return res.status(500).json({ error: error.message });
-  if (!data.success) return res.status(400).json({ error: data.error });
-  res.json(data);
+  // Find the recipient by display_name
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('id, credits_balance')
+    .eq('display_name', guest_identifier)
+    .maybeSingle();
+
+  if (!profile) {
+    return res.status(404).json({ error: 'user_not_found', message: `No signed-in user with name "${guest_identifier}" found. Guest users cannot receive gifted credits.` });
+  }
+
+  const newBalance = (profile.credits_balance ?? 0) + Number(amount);
+  const { error: updateErr } = await supabaseAdmin
+    .from('profiles')
+    .update({ credits_balance: newBalance })
+    .eq('id', profile.id);
+
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  res.json({ success: true, new_balance: newBalance });
 });
 
 // GET /api/venues/:id/users — list requesters with stats + ban status
@@ -194,11 +209,41 @@ router.get('/:id/users', requireAuth, async (req, res) => {
     if (item.requested_at > userMap[name].lastSeen) userMap[name].lastSeen = item.requested_at;
   }
 
+  // Cross-reference with profiles to identify signed-in users
+  const requesterNames = Object.keys(userMap);
+  let registeredNames = new Set();
+  if (requesterNames.length) {
+    const { data: profiles } = await supabaseAdmin
+      .from('profiles')
+      .select('display_name')
+      .in('display_name', requesterNames);
+    registeredNames = new Set((profiles ?? []).map(p => p.display_name));
+  }
+
   const users = Object.values(userMap)
-    .map(u => ({ ...u, banned: bannedNames.has(u.name) }))
+    .map(u => ({ ...u, banned: bannedNames.has(u.name), isRegistered: registeredNames.has(u.name) }))
     .sort((a, b) => b.requests - a.requests);
 
   res.json({ users, bannedUsers: bannedUsers ?? [] });
+});
+
+// DELETE /api/venues/:id/users/:name — remove user (clears their pending requests, no ban)
+router.delete('/:id/users/:name', requireAuth, async (req, res) => {
+  const { data: venue } = await supabaseAdmin
+    .from('venues').select('id')
+    .eq('id', req.params.id).eq('host_id', req.user.id).single();
+  if (!venue) return res.status(403).json({ error: 'Forbidden' });
+
+  const name = decodeURIComponent(req.params.name);
+  const { error } = await supabaseAdmin
+    .from('queue_items')
+    .delete()
+    .eq('venue_id', req.params.id)
+    .eq('requester_name', name)
+    .eq('status', 'pending');
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
 });
 
 // POST /api/venues/:id/banned-users — ban a user by name
