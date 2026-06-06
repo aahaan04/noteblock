@@ -1,26 +1,34 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 
+/**
+ * CrossfadePlayer
+ *
+ * IMPORTANT: the very first playback MUST be triggered by a user gesture
+ * (clicking the "Start Player" button in VenueControl). Chrome blocks unmuted
+ * autoplay from code. After the first user-gesture play, subsequent auto-advance
+ * and crossfade calls work fine because the browser has already unlocked audio.
+ */
 const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   { queue, vibeVideos, vibeEnabled, crossfadeSecs = 5,
     onMarkPlaying, onMarkPlayed, onNowPlaying, onVibeActive },
   ref
 ) {
-  const [ytReady, setYtReady]     = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);       // reactive flag for overlay
-  const [displayActive, setDisplayActive] = useState('A'); // which iframe is on top
+  const [ytReady,      setYtReady]      = useState(false);
+  const [isPlaying,    setIsPlaying]    = useState(false);
+  const [displayActive, setDisplayActive] = useState('A');
 
-  const pA = useRef(null);
-  const pB = useRef(null);
+  const pA          = useRef(null);
+  const pB          = useRef(null);
   const readyCount  = useRef(0);
+  const initialized = useRef(false); // true once both onReady fired
+  const audioUnlocked = useRef(false); // true after first user-gesture play
   const fadeRef     = useRef(null);
   const pollRef     = useRef(null);
-  const initialized = useRef(false); // true once both onReady fired
 
-  // All mutable playback state lives here — never causes stale closures
   const S = useRef({
     active: 'A',
     crossfading: false,
-    mode: 'idle',          // 'idle' | 'requested' | 'vibe'
+    mode: 'idle',
     current: null,
     next: null,
     vibeIdx: 0,
@@ -30,10 +38,9 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     crossfadeSecs: 5,
   });
 
-  // Keep S in sync with props
-  useEffect(() => { S.current.queue       = queue;       }, [queue]);
-  useEffect(() => { S.current.vibeVideos  = vibeVideos;  }, [vibeVideos]);
-  useEffect(() => { S.current.vibeEnabled = vibeEnabled; }, [vibeEnabled]);
+  useEffect(() => { S.current.queue        = queue;        }, [queue]);
+  useEffect(() => { S.current.vibeVideos   = vibeVideos;  }, [vibeVideos]);
+  useEffect(() => { S.current.vibeEnabled  = vibeEnabled; }, [vibeEnabled]);
   useEffect(() => { S.current.crossfadeSecs = crossfadeSecs; }, [crossfadeSecs]);
 
   // ── helpers ───────────────────────────────────────────────────────────────
@@ -44,8 +51,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   function getNextRequested(excludeId = null) {
     const pending = S.current.queue.filter(i => i.status === 'pending' && i.id !== excludeId);
     if (!pending.length) return null;
-    const quick = pending.filter(i => i.play_type === 'quick');
-    const item  = quick[0] ?? pending[0];
+    const item = pending.find(i => i.play_type === 'quick') ?? pending[0];
     return { type: 'requested', item, videoId: item.youtube_video_id, title: item.song_title };
   }
 
@@ -63,7 +69,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     return getNextVibe(null);
   }
 
-  function safePlay(player, videoId) {
+  function safeLoad(player, videoId) {
     try { player.loadVideoById(videoId); player.unMute(); player.setVolume(100); } catch {}
   }
 
@@ -71,14 +77,14 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     try { player.cueVideoById(videoId); player.unMute(); player.setVolume(0); } catch {}
   }
 
-  // ── start a song (no crossfade) ───────────────────────────────────────────
+  // ── start a song (hard cut, no crossfade) ────────────────────────────────
 
   function startEntry(entry) {
     S.current.current = entry;
     S.current.mode    = entry.type;
     if (entry.type === 'vibe') S.current.vibeIdx = entry.vibeIdx ?? 0;
 
-    safePlay(getActive(), entry.videoId);
+    safeLoad(getActive(), entry.videoId);
 
     if (entry.type === 'requested') onMarkPlaying?.(entry.item.id);
     onNowPlaying?.(entry);
@@ -90,7 +96,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     if (next) safeCue(getInactive(), next.videoId);
   }
 
-  // ── crossfade to next song ────────────────────────────────────────────────
+  // ── crossfade to next ─────────────────────────────────────────────────────
 
   function doCrossfade(targetEntry) {
     if (S.current.crossfading) return;
@@ -119,7 +125,6 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       const t = step / steps;
       try { outPlayer?.setVolume(Math.round(100 * (1 - t))); } catch {}
       try { inPlayer?.setVolume(Math.round(100 * t));         } catch {}
-
       if (step < steps) return;
 
       clearInterval(fadeRef.current);
@@ -129,7 +134,6 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       S.current.active = newActive;
       setDisplayActive(newActive);
 
-      // Mark old item played
       const prev = S.current.current;
       if (prev?.type === 'requested') onMarkPlayed?.(prev.item.id);
 
@@ -141,7 +145,6 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
         onNowPlaying?.(entry);
         onVibeActive?.(entry.type === 'vibe');
         setIsPlaying(true);
-
         const afterNext = computeNext(entry);
         S.current.next = afterNext;
         if (afterNext) safeCue(getInactive(), afterNext.videoId);
@@ -166,16 +169,15 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
 
     const next = S.current.next ?? computeNext(prev);
     if (next) {
-      S.current.crossfading = false;
       const newActive = S.current.active === 'A' ? 'B' : 'A';
-      S.current.active = newActive;
-      setDisplayActive(newActive);
+      S.current.active  = newActive;
       S.current.current = next;
       S.current.mode    = next.type;
       if (next.type === 'vibe') S.current.vibeIdx = next.vibeIdx ?? 0;
       if (next.type === 'requested') onMarkPlaying?.(next.item.id);
       onNowPlaying?.(next);
       onVibeActive?.(next.type === 'vibe');
+      setDisplayActive(newActive);
       setIsPlaying(true);
       try {
         const ap = newActive === 'A' ? pA.current : pB.current;
@@ -192,8 +194,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       onVibeActive?.(false);
       setIsPlaying(false);
       if (S.current.vibeEnabled && S.current.vibeVideos.length) {
-        const vibe = getNextVibe(null);
-        if (vibe) startEntry(vibe);
+        startEntry(getNextVibe(null));
       }
     }
   }
@@ -204,21 +205,30 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     if (!next) return;
     try { getActive()?.stopVideo(); } catch {}
     const newActive = S.current.active === 'A' ? 'B' : 'A';
-    S.current.active = newActive;
+    S.current.active  = newActive;
+    S.current.current = next;
+    S.current.mode    = next.type;
     setDisplayActive(newActive);
     try {
       const ap = newActive === 'A' ? pA.current : pB.current;
       ap?.loadVideoById(next.videoId); ap?.unMute(); ap?.setVolume(100);
     } catch {}
-    S.current.current = next;
-    S.current.mode    = next.type;
-    S.current.next    = computeNext(next);
+    S.current.next = computeNext(next);
     if (S.current.next) safeCue(getInactive(), S.current.next.videoId);
   }
 
-  // ── expose skip() / start() ───────────────────────────────────────────────
+  // ── expose methods to VenueControl ───────────────────────────────────────
 
   useImperativeHandle(ref, () => ({
+    // Called from a click handler — provides the user gesture Chrome needs for audio
+    start() {
+      if (!initialized.current || S.current.mode !== 'idle') return;
+      audioUnlocked.current = true;
+      const req = getNextRequested();
+      if (req)  { startEntry(req);  return; }
+      const vibe = getNextVibe(null);
+      if (vibe) startEntry(vibe);
+    },
     skip() {
       if (S.current.crossfading) return;
       const prev = S.current.current;
@@ -235,14 +245,6 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
         onVibeActive?.(false);
         setIsPlaying(false);
       }
-    },
-    // Fallback manual start (e.g. if autoplay was blocked)
-    start() {
-      if (S.current.mode !== 'idle' || !initialized.current) return;
-      const req = getNextRequested();
-      if (req)  { startEntry(req);  return; }
-      const vibe = getNextVibe(null);
-      if (vibe) startEntry(vibe);
     },
     get isIdle() { return S.current.mode === 'idle'; },
   }));
@@ -263,46 +265,34 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     return () => clearInterval(poll);
   }, []);
 
-  // ── create players once API is ready ─────────────────────────────────────
+  // ── create players once API ready, wait for both onReady ─────────────────
 
   useEffect(() => {
     if (!ytReady) return;
     readyCount.current  = 0;
     initialized.current = false;
 
-    const onPlayerReady = () => {
-      readyCount.current++;
-      if (readyCount.current < 2) return;
-
-      initialized.current = true;
-
-      // Auto-start immediately — no user gesture needed if autoplay is permitted
-      const req = getNextRequested();
-      if (req)  { startEntry(req);  }
-      else if (S.current.vibeEnabled && S.current.vibeVideos.length) {
-        const vibe = getNextVibe(null);
-        if (vibe) startEntry(vibe);
-      }
-
-      // Poll: trigger crossfade when approaching end of song
-      pollRef.current = setInterval(() => {
-        if (!initialized.current || S.current.crossfading || S.current.mode === 'idle') return;
-        const player = getActive();
-        try {
-          if (player?.getPlayerState?.() !== 1) return; // not playing
-          const remaining = player.getDuration?.() - player.getCurrentTime?.();
-          if (!remaining || remaining < 0) return;
-          const threshold = S.current.crossfadeSecs ?? 5;
-          if (remaining <= threshold && S.current.next) doCrossfade(null);
-        } catch {}
-      }, 500);
-    };
-
     const makePlayer = (elId, name) =>
       new window.YT.Player(elId, {
         playerVars: { autoplay: 0, controls: 1, modestbranding: 1, rel: 0, playsinline: 1, enablejsapi: 1 },
         events: {
-          onReady: onPlayerReady,
+          onReady: () => {
+            readyCount.current++;
+            if (readyCount.current >= 2) {
+              initialized.current = true;
+              // Poll: crossfade near end of song
+              pollRef.current = setInterval(() => {
+                if (!audioUnlocked.current || S.current.crossfading || S.current.mode === 'idle') return;
+                try {
+                  const player = getActive();
+                  if (player?.getPlayerState?.() !== 1) return;
+                  const remaining = (player.getDuration?.() ?? 0) - (player.getCurrentTime?.() ?? 0);
+                  const threshold = S.current.crossfadeSecs ?? 5;
+                  if (remaining > 0 && remaining <= threshold && S.current.next) doCrossfade(null);
+                } catch {}
+              }, 500);
+            }
+          },
           onStateChange: (e) => { if (e.data === window.YT.PlayerState.ENDED) handleEnded(name); },
           onError:       ()  => handleError(name),
         },
@@ -314,27 +304,21 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     return () => {
       clearInterval(pollRef.current);
       clearInterval(fadeRef.current);
-      initialized.current = false;
-      readyCount.current  = 0;
+      initialized.current  = false;
+      audioUnlocked.current = false;
+      readyCount.current   = 0;
       try { pA.current?.destroy(); } catch {}
       try { pB.current?.destroy(); } catch {}
     };
   }, [ytReady]);
 
-  // ── react to queue / vibe changes ────────────────────────────────────────
+  // ── auto-advance: switch from vibe to requested, update preload ───────────
 
   useEffect(() => {
-    if (!initialized.current) return;
+    // Only auto-act after audio is unlocked (user has clicked Start at least once)
+    if (!initialized.current || !audioUnlocked.current) return;
     const { mode } = S.current;
 
-    if (mode === 'idle') {
-      const req = getNextRequested();
-      if (req)  { startEntry(req); return; }
-      if (vibeEnabled && vibeVideos.length) {
-        startEntry({ type: 'vibe', videoId: vibeVideos[0].videoId, title: vibeVideos[0].title, vibeIdx: 0 });
-      }
-      return;
-    }
     if (mode === 'vibe' && !S.current.crossfading) {
       const req = getNextRequested();
       if (req) { doCrossfade(req); return; }
