@@ -173,15 +173,12 @@ export default function Landing() {
           </button>
         </form>
 
-        <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <button
-            className="btn-secondary"
-            style={{ width: '100%', padding: 12 }}
-            onClick={handleGoogle}
-          >
+        {/* Google OAuth — uncomment once enabled in Supabase Dashboard → Auth → Providers → Google */}
+        {/* <div style={{ marginTop: 16 }}>
+          <button className="btn-secondary" style={{ width: '100%', padding: 12 }} onClick={handleGoogle}>
             <span style={{ marginRight: 8 }}>G</span> {t.signInWithGoogle}
           </button>
-        </div>
+        </div> */}
       </div>
     </div>
   );
