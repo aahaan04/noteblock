@@ -46,7 +46,7 @@ export default {
   seconds: 'sec',
   welcomeCredits: 'Welcome Credits',
   vibe: 'Vibe',
-  vibeDescription: 'Vibe description (e.g. "chill Bollywood")',
+  vibeDescription: 'Vibe description (e.g. "upbeat party hits")',
   vibePlaylistUrls: 'YouTube playlist URLs (one per line)',
   enableVibe: 'Enable Vibe Mode',
   banSong: 'Ban Song',

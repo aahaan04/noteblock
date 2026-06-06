@@ -260,7 +260,6 @@ export default function VenueControl() {
               { key: 'vibe', label: t.vibe },
               { key: 'ban', label: t.bannedSongs },
               { key: 'users', label: '👥 Users' },
-              { key: 'gift', label: t.giftCredits },
               { key: 'stats', label: t.stats },
               { key: 'qr', label: 'QR' },
             ].map(({ key, label }) => (
@@ -301,10 +300,6 @@ export default function VenueControl() {
 
             {tab === 'users' && (
               <UsersPanel venueId={id} token={token} />
-            )}
-
-            {tab === 'gift' && (
-              <GiftCredits venueId={id} token={token} />
             )}
 
             {tab === 'stats' && (
@@ -355,7 +350,7 @@ function VibeSettings({ venue, onUpdate }) {
 
       <div>
         <label style={{ fontSize: 13, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>{t.vibeDescription}</label>
-        <input className="input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. chill Bollywood 90s" />
+        <input className="input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. upbeat party hits, 2000s pop, lofi chill" />
       </div>
 
       <div>
@@ -519,7 +514,11 @@ function UsersPanel({ venueId, token }) {
   const [bannedUsers, setBannedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // 'all' | 'banned'
-  const [banningName, setBanningName] = useState(null); // name pending confirm
+  // Modal state: { type: 'ban'|'gift', user }
+  const [modal, setModal] = useState(null);
+  const [giftAmount, setGiftAmount] = useState(10);
+  const [giftMsg, setGiftMsg] = useState('');
+  const [openMenu, setOpenMenu] = useState(null); // name of user whose menu is open
 
   async function load() {
     setLoading(true);
@@ -533,23 +532,46 @@ function UsersPanel({ venueId, token }) {
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
+  // Close menu on outside click
+  useEffect(() => {
+    if (!openMenu) return;
+    const close = () => setOpenMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [openMenu]);
+
   async function handleBan(name) {
     await api.venues.banUser(venueId, { requester_name: name }, token).catch(() => {});
-    setBanningName(null);
+    setModal(null);
     load();
   }
 
-  async function handleUnban(id) {
-    await api.venues.unbanUser(venueId, id, token).catch(() => {});
+  async function handleUnban(name) {
+    const record = bannedUsers.find(b => b.requester_name === name);
+    if (!record) return;
+    await api.venues.unbanUser(venueId, record.id, token).catch(() => {});
+    setModal(null);
     load();
   }
 
+  async function handleGift(name) {
+    try {
+      await api.venues.gift(venueId, { guest_identifier: name, amount: giftAmount }, token);
+      setGiftMsg(`✓ ${giftAmount} credits gifted to ${name}`);
+      setTimeout(() => { setGiftMsg(''); setModal(null); }, 2000);
+    } catch (err) {
+      setGiftMsg('✗ ' + (err.data?.error ?? 'Failed'));
+    }
+  }
+
+  const isGuest = (name) => name === 'Guest' || !name;
   const displayed = filter === 'banned' ? users.filter(u => u.banned) : users;
 
   if (loading) return <p style={{ color: 'var(--text-muted)' }}>Loading users…</p>;
 
   return (
     <div>
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <h3 style={{ margin: 0 }}>👥 Room Users</h3>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -575,71 +597,165 @@ function UsersPanel({ venueId, token }) {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {displayed.map(u => (
-          <div key={u.name} style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            background: u.banned ? 'rgba(248,113,113,0.06)' : 'var(--surface)',
-            border: `1px solid ${u.banned ? 'rgba(248,113,113,0.3)' : 'var(--border)'}`,
-            borderRadius: 10, padding: '10px 14px',
-          }}>
-            {/* Avatar */}
-            <div style={{
-              width: 36, height: 36, borderRadius: '50%',
-              background: u.banned ? 'rgba(248,113,113,0.2)' : 'rgba(99,102,241,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, flexShrink: 0,
+        {displayed.map(u => {
+          const named = u.name && u.name !== 'Guest';
+          return (
+            <div key={u.name} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: u.banned ? 'rgba(248,113,113,0.06)' : 'var(--surface)',
+              border: `1px solid ${u.banned ? 'rgba(248,113,113,0.3)' : 'var(--border)'}`,
+              borderRadius: 10, padding: '10px 14px',
+              position: 'relative',
             }}>
-              {u.banned ? '🚫' : '🎵'}
-            </div>
+              {/* Avatar */}
+              <div style={{
+                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                background: u.banned ? 'rgba(248,113,113,0.2)' : named ? 'rgba(99,102,241,0.2)' : 'rgba(100,116,139,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 15, fontWeight: 700, color: u.banned ? '#f87171' : named ? 'var(--accent)' : 'var(--text-muted)',
+              }}>
+                {u.banned ? '🚫' : named ? u.name[0].toUpperCase() : '?'}
+              </div>
 
-            {/* Info */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {u.name}
-                {u.banned && (
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, background: 'rgba(248,113,113,0.2)', color: '#f87171' }}>
-                    BANNED
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>
+                    {u.name || 'Anonymous'}
                   </span>
+                  {/* User type badge */}
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999,
+                    background: named ? 'rgba(99,102,241,0.15)' : 'rgba(100,116,139,0.15)',
+                    color: named ? 'var(--accent)' : 'var(--text-muted)',
+                  }}>
+                    {named ? 'User' : 'Guest'}
+                  </span>
+                  {u.banned && (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, background: 'rgba(248,113,113,0.2)', color: '#f87171' }}>
+                      BANNED
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {u.requests} {u.requests === 1 ? 'song' : 'songs'} · {u.credits} credits spent
+                </div>
+              </div>
+
+              {/* ⋯ More menu */}
+              <div style={{ position: 'relative', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                <button
+                  onClick={() => setOpenMenu(openMenu === u.name ? null : u.name)}
+                  style={{
+                    width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border)',
+                    background: openMenu === u.name ? 'var(--accent)' : 'var(--surface)',
+                    color: openMenu === u.name ? '#fff' : 'var(--text-muted)',
+                    cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  ⋯
+                </button>
+
+                {openMenu === u.name && (
+                  <div style={{
+                    position: 'absolute', right: 0, top: 36, zIndex: 100,
+                    background: 'var(--bg)', border: '1px solid var(--border)',
+                    borderRadius: 10, minWidth: 160,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                    overflow: 'hidden',
+                  }}>
+                    <button
+                      onClick={() => { setOpenMenu(null); setGiftAmount(10); setGiftMsg(''); setModal({ type: 'gift', user: u }); }}
+                      style={{ display: 'block', width: '100%', padding: '10px 14px', background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >
+                      🎁 Gift Credits
+                    </button>
+                    {u.banned ? (
+                      <button
+                        onClick={() => { setOpenMenu(null); handleUnban(u.name); }}
+                        style={{ display: 'block', width: '100%', padding: '10px 14px', background: 'none', border: 'none', color: '#34d399', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      >
+                        ✓ Unban User
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setOpenMenu(null); setModal({ type: 'ban', user: u }); }}
+                        style={{ display: 'block', width: '100%', padding: '10px 14px', background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      >
+                        🚫 Ban User
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {u.requests} {u.requests === 1 ? 'song' : 'songs'} · {u.credits} credits spent
-              </div>
             </div>
-
-            {/* Action */}
-            {u.banned ? (
-              <button
-                onClick={() => handleUnban(bannedUsers.find(b => b.requester_name === u.name)?.id)}
-                style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #34d399', background: 'none', color: '#34d399', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
-              >
-                ✓ Unban
-              </button>
-            ) : (
-              <button
-                onClick={() => setBanningName(u.name)}
-                style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid rgba(248,113,113,0.4)', background: 'none', color: '#f87171', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
-              >
-                🚫 Ban
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Ban confirm modal */}
-      {banningName && (
+      {/* Ban modal */}
+      {modal?.type === 'ban' && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
           <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 14, padding: 24, maxWidth: 340, width: '100%' }}>
-            <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 16 }}>Ban "{banningName}"?</p>
+            <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 16 }}>Ban "{modal.user.name}"?</p>
             <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-muted)' }}>
               They won't be able to request songs in this room anymore.
             </p>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn-primary" style={{ flex: 1, background: '#f87171' }} onClick={() => handleBan(banningName)}>
+              <button className="btn-primary" style={{ flex: 1, background: '#f87171' }} onClick={() => handleBan(modal.user.name)}>
                 🚫 Ban
               </button>
-              <button className="btn-secondary" onClick={() => setBanningName(null)}>Cancel</button>
+              <button className="btn-secondary" onClick={() => setModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gift credits modal */}
+      {modal?.type === 'gift' && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+          <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 14, padding: 24, maxWidth: 340, width: '100%' }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 16 }}>🎁 Gift Credits</p>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)' }}>To: {modal.user.name}</p>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              {[5, 10, 20, 50].map(amt => (
+                <button
+                  key={amt}
+                  onClick={() => setGiftAmount(amt)}
+                  style={{
+                    flex: 1, padding: '8px 0', borderRadius: 8,
+                    border: `1px solid ${giftAmount === amt ? 'var(--accent)' : 'var(--border)'}`,
+                    background: giftAmount === amt ? 'rgba(99,102,241,0.15)' : 'var(--surface)',
+                    color: giftAmount === amt ? 'var(--accent)' : 'var(--text)',
+                    cursor: 'pointer', fontWeight: 700, fontSize: 14,
+                  }}
+                >
+                  {amt}
+                </button>
+              ))}
+            </div>
+            <input
+              className="input"
+              type="number"
+              min={1} max={500}
+              value={giftAmount}
+              onChange={e => setGiftAmount(parseInt(e.target.value) || 1)}
+              style={{ marginBottom: 14 }}
+            />
+            {giftMsg && (
+              <p style={{ margin: '0 0 12px', fontSize: 13, color: giftMsg.startsWith('✓') ? '#34d399' : '#f87171' }}>{giftMsg}</p>
+            )}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={() => handleGift(modal.user.name)}>
+                🎁 Gift {giftAmount} Credits
+              </button>
+              <button className="btn-secondary" onClick={() => setModal(null)}>Cancel</button>
             </div>
           </div>
         </div>
