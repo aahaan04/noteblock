@@ -9,53 +9,71 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (data.session) loadProfile(data.session.user.id);
-      else setLoading(false);
+    // Get existing session on mount
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      if (s?.user) {
+        loadProfile(s.user);
+      } else {
+        setLoading(false);
+      }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
-      setSession(sess);
-      if (sess) loadProfile(sess.user.id);
-      else { setProfile(null); setLoading(false); }
+    // Listen for auth state changes (login, logout, signup)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s);
+      if (s?.user) {
+        loadProfile(s.user);
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
     });
 
-    return () => listener.subscription.unsubscribe();
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Load profile from public.users; create it if the DB trigger missed it
-  async function loadProfile(userId) {
+  async function loadProfile(authUser) {
     try {
-      // First attempt
-      let { data } = await supabase
+      // Try to read existing row
+      const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', userId)
-        .single();
+        .eq('id', authUser.id)
+        .maybeSingle(); // returns null instead of error when not found
 
-      if (!data) {
-        // Trigger may not have fired — create the row ourselves
-        const { data: { user } } = await supabase.auth.getUser();
-        const meta = user?.user_metadata ?? {};
-        const { data: created } = await supabase
-          .from('users')
-          .upsert({
-            id: userId,
-            email: user?.email ?? '',
-            display_name: meta.display_name ?? user?.email?.split('@')[0] ?? 'User',
-            role: meta.role ?? 'guest',
-            credits_balance: 0,
-            language: 'en',
-          }, { onConflict: 'id' })
-          .select()
-          .single();
-        data = created;
+      if (data) {
+        setProfile(data);
+        setLoading(false);
+        return;
       }
 
-      setProfile(data ?? null);
+      // Row missing — create it from auth metadata
+      const meta = authUser.user_metadata ?? {};
+      const newProfile = {
+        id: authUser.id,
+        email: authUser.email ?? '',
+        display_name: meta.display_name ?? authUser.email?.split('@')[0] ?? 'User',
+        role: meta.role ?? 'guest',
+        credits_balance: 0,
+        language: 'en',
+      };
+
+      const { data: created, error: upsertError } = await supabase
+        .from('users')
+        .upsert(newProfile, { onConflict: 'id' })
+        .select()
+        .single();
+
+      if (upsertError) {
+        console.error('Profile upsert error:', upsertError);
+        // Use in-memory profile so the app still works
+        setProfile(newProfile);
+      } else {
+        setProfile(created);
+      }
     } catch (e) {
-      console.error('loadProfile error:', e);
+      console.error('loadProfile unexpected error:', e);
       setProfile(null);
     } finally {
       setLoading(false);
@@ -91,21 +109,22 @@ export function AuthProvider({ children }) {
   }
 
   async function refreshProfile() {
-    if (!session?.user?.id) return;
+    if (!session?.user) return;
     const { data } = await supabase
       .from('users')
       .select('*')
       .eq('id', session.user.id)
-      .single();
+      .maybeSingle();
     if (data) setProfile(data);
   }
 
-  const token = session?.access_token ?? null;
-  const user = session?.user ?? null;
-
   return (
     <AuthContext.Provider value={{
-      session, user, profile, token, loading,
+      session,
+      user: session?.user ?? null,
+      profile,
+      token: session?.access_token ?? null,
+      loading,
       signUp, signIn, signInWithGoogle, signOut, refreshProfile,
     }}>
       {children}

@@ -1,25 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 
 export default function Landing() {
-  const { signIn, signUp, signInWithGoogle, profile, loading } = useAuth();
+  const { signIn, signUp, profile, loading } = useAuth();
   const { t } = useLang();
   const navigate = useNavigate();
 
-  const [mode, setMode] = useState(null); // null | 'host-auth' | 'guest-auth' | 'guest-anon'
+  const [mode, setMode] = useState(null); // null | 'host-auth' | 'guest-auth'
   const [authTab, setAuthTab] = useState('login'); // 'login' | 'signup'
   const [form, setForm] = useState({ email: '', password: '', displayName: '' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Redirect if already logged in
-  if (!loading && profile) {
-    if (profile.role === 'host') navigate('/host/dashboard', { replace: true });
-    else navigate('/guest', { replace: true });
-    return null;
-  }
+  // Redirect once profile is loaded
+  useEffect(() => {
+    if (!loading && profile) {
+      if (profile.role === 'host') navigate('/host/dashboard', { replace: true });
+      else navigate('/guest', { replace: true });
+    }
+  }, [loading, profile]);
+
+  if (loading) return null;
 
   const isHost = mode === 'host-auth';
 
