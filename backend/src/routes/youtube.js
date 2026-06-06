@@ -5,17 +5,16 @@ const router = Router();
 const YT_BASE = 'https://www.googleapis.com/youtube/v3';
 const API_KEY = () => process.env.YOUTUBE_API_KEY;
 
-// GET /api/youtube/search?q=...&venueId=...
+// GET /api/youtube/search?q=...
 router.get('/search', async (req, res) => {
-  const { q, venueId } = req.query;
+  const { q } = req.query;
   if (!q) return res.status(400).json({ error: 'q required' });
 
-  // Bias toward Indian music by appending context
-  const query = encodeURIComponent(`${q} Hindi Bollywood song`);
+  const query = encodeURIComponent(q);
 
   try {
     const searchRes = await fetch(
-      `${YT_BASE}/search?part=snippet&q=${query}&type=video&videoCategoryId=10&maxResults=15&regionCode=IN&relevanceLanguage=hi&key=${API_KEY()}`
+      `${YT_BASE}/search?part=snippet&q=${query}&type=video&videoCategoryId=10&maxResults=10&key=${API_KEY()}`
     );
     const searchData = await searchRes.json();
 
@@ -89,6 +88,44 @@ router.get('/playlist', async (req, res) => {
   } catch (err) {
     console.error('Playlist fetch error:', err);
     res.status(500).json({ error: 'YouTube API error' });
+  }
+});
+
+// GET /api/youtube/suggestions?vibe=...
+// Returns 5 song suggestions based on a vibe/mood description
+router.get('/suggestions', async (req, res) => {
+  const { vibe } = req.query;
+  if (!vibe) return res.json([]);
+
+  // Search for top songs matching the vibe (not a playlist, actual song results)
+  const query = encodeURIComponent(`${vibe} best songs mix`);
+  try {
+    const searchRes = await fetch(
+      `${YT_BASE}/search?part=snippet&q=${query}&type=video&videoCategoryId=10&maxResults=5&key=${API_KEY()}`
+    );
+    const searchData = await searchRes.json();
+    if (!searchData.items?.length) return res.json([]);
+
+    const ids = searchData.items.map(i => i.id.videoId).join(',');
+    const detailRes = await fetch(
+      `${YT_BASE}/videos?part=contentDetails,snippet&id=${ids}&key=${API_KEY()}`
+    );
+    const detailData = await detailRes.json();
+    const durationMap = {};
+    for (const item of detailData.items ?? []) {
+      durationMap[item.id] = parseDuration(item.contentDetails.duration);
+    }
+
+    res.json(searchData.items.map(item => ({
+      videoId: item.id.videoId,
+      title: item.snippet.title,
+      channel: item.snippet.channelTitle,
+      thumbnail: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
+      duration: durationMap[item.id.videoId] ?? null,
+    })));
+  } catch (err) {
+    console.error('Suggestions error:', err);
+    res.json([]);
   }
 });
 

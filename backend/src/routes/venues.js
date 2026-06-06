@@ -166,6 +166,73 @@ router.post('/:id/gift', requireAuth, async (req, res) => {
   res.json(data);
 });
 
+// GET /api/venues/:id/users — list requesters with stats + ban status
+router.get('/:id/users', requireAuth, async (req, res) => {
+  const { data: venue } = await supabaseAdmin.from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
+  if (!venue) return res.status(403).json({ error: 'Forbidden' });
+
+  const { data: items } = await supabaseAdmin
+    .from('queue_items')
+    .select('requester_name, credits_charged, status, requested_at')
+    .eq('venue_id', req.params.id)
+    .in('status', ['pending', 'playing', 'played']);
+
+  const { data: bannedUsers } = await supabaseAdmin
+    .from('banned_users')
+    .select('*')
+    .eq('venue_id', req.params.id);
+
+  const bannedNames = new Set((bannedUsers ?? []).map(b => b.requester_name));
+
+  // Group by requester_name
+  const userMap = {};
+  for (const item of items ?? []) {
+    const name = item.requester_name || 'Guest';
+    if (!userMap[name]) userMap[name] = { name, requests: 0, credits: 0, lastSeen: item.requested_at };
+    userMap[name].requests++;
+    userMap[name].credits += item.credits_charged ?? 0;
+    if (item.requested_at > userMap[name].lastSeen) userMap[name].lastSeen = item.requested_at;
+  }
+
+  const users = Object.values(userMap)
+    .map(u => ({ ...u, banned: bannedNames.has(u.name) }))
+    .sort((a, b) => b.requests - a.requests);
+
+  res.json({ users, bannedUsers: bannedUsers ?? [] });
+});
+
+// POST /api/venues/:id/banned-users — ban a user by name
+router.post('/:id/banned-users', requireAuth, async (req, res) => {
+  const { requester_name } = req.body;
+  if (!requester_name) return res.status(400).json({ error: 'requester_name required' });
+
+  const { data: venue } = await supabaseAdmin.from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
+  if (!venue) return res.status(403).json({ error: 'Forbidden' });
+
+  const { data, error } = await supabaseAdmin
+    .from('banned_users')
+    .upsert({ venue_id: req.params.id, requester_name }, { onConflict: 'venue_id,requester_name' })
+    .select().single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+// DELETE /api/venues/:id/banned-users/:bannedUserId — unban
+router.delete('/:id/banned-users/:bannedUserId', requireAuth, async (req, res) => {
+  const { data: venue } = await supabaseAdmin.from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
+  if (!venue) return res.status(403).json({ error: 'Forbidden' });
+
+  const { error } = await supabaseAdmin
+    .from('banned_users')
+    .delete()
+    .eq('id', req.params.bannedUserId)
+    .eq('venue_id', req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // GET /api/venues/:id/stats — basic stats
 router.get('/:id/stats', requireAuth, async (req, res) => {
   const { data: venue } = await supabaseAdmin

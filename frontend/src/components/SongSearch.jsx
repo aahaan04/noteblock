@@ -1,22 +1,38 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { api } from '../lib/api.js';
 import { useLang } from '../context/LangContext.jsx';
 
-export default function SongSearch({ venueId, bannedIds = new Set(), onSelect }) {
+const PAGE_SIZE = 5;
+
+export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescription = '' }) {
   const { t } = useLang();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const debounceRef = useRef(null);
+
+  // Load vibe suggestions once on mount if a vibe description is set
+  useEffect(() => {
+    if (!vibeDescription) return;
+    setSuggestionsLoading(true);
+    api.youtube.suggestions(vibeDescription)
+      .then(data => setSuggestions(data.filter(r => !bannedIds.has(r.videoId))))
+      .catch(() => setSuggestions([]))
+      .finally(() => setSuggestionsLoading(false));
+  }, [vibeDescription]); // eslint-disable-line
 
   const search = useCallback((q) => {
     clearTimeout(debounceRef.current);
-    if (!q.trim()) { setResults([]); return; }
+    if (!q.trim()) { setResults([]); setVisibleCount(PAGE_SIZE); return; }
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
         const data = await api.youtube.search(q);
         setResults(data.filter(r => !bannedIds.has(r.videoId)));
+        setVisibleCount(PAGE_SIZE);
       } catch {
         setResults([]);
       } finally {
@@ -30,8 +46,12 @@ export default function SongSearch({ venueId, bannedIds = new Set(), onSelect })
     search(e.target.value);
   };
 
+  const visible = results.slice(0, visibleCount);
+  const hasMore = results.length > visibleCount;
+
   return (
     <div>
+      {/* Search input */}
       <div style={{ position: 'relative', marginBottom: 12 }}>
         <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 18, pointerEvents: 'none' }}>
           🔍
@@ -54,6 +74,7 @@ export default function SongSearch({ venueId, bannedIds = new Set(), onSelect })
         />
       </div>
 
+      {/* Search results */}
       {loading && (
         <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem 0' }}>
           {t.searching}
@@ -66,23 +87,62 @@ export default function SongSearch({ venueId, bannedIds = new Set(), onSelect })
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {results.map(r => (
-          <SongCard key={r.videoId} song={r} onSelect={onSelect} />
-        ))}
-      </div>
+      {!loading && results.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
+          {visible.map(r => (
+            <SongCard key={r.videoId} song={r} onSelect={onSelect} />
+          ))}
+          {hasMore && (
+            <button
+              onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+              style={{
+                padding: '10px', borderRadius: 8, border: '1px dashed var(--border)',
+                background: 'transparent', color: 'var(--text-muted)',
+                cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              }}
+            >
+              Load {Math.min(results.length - visibleCount, PAGE_SIZE)} more results ↓
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Vibe suggestions */}
+      {vibeDescription && (
+        <div style={{ marginTop: query ? 20 : 0 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+            fontSize: 12, fontWeight: 700, color: 'var(--accent)',
+            textTransform: 'uppercase', letterSpacing: '0.06em',
+          }}>
+            <span>✨</span>
+            <span>Suggested for this vibe</span>
+          </div>
+          {suggestionsLoading && (
+            <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>Loading suggestions…</div>
+          )}
+          {!suggestionsLoading && suggestions.length === 0 && (
+            <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>No suggestions available</div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {suggestions.map(r => (
+              <SongCard key={r.videoId} song={r} onSelect={onSelect} accent />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function SongCard({ song, onSelect }) {
+function SongCard({ song, onSelect, accent }) {
   return (
     <button
       onClick={() => onSelect(song)}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
+        background: accent ? 'rgba(99,102,241,0.06)' : 'var(--surface)',
+        border: `1px solid ${accent ? 'rgba(99,102,241,0.25)' : 'var(--border)'}`,
         borderRadius: 10,
         padding: '10px 14px',
         textAlign: 'left',
@@ -91,7 +151,7 @@ function SongCard({ song, onSelect }) {
         transition: 'border-color 0.15s',
       }}
       onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = accent ? 'rgba(99,102,241,0.25)' : 'var(--border)'}
     >
       {song.thumbnail && (
         <img

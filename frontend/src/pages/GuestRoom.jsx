@@ -134,6 +134,7 @@ export default function GuestRoom() {
       const msg = err.data?.error;
       if (msg === 'insufficient_credits') showToast(t.insufficientCredits);
       else if (msg === 'song_banned') showToast(t.songBanned);
+      else if (msg === 'user_banned') showToast('🚫 You have been banned from this jukebox');
       else showToast(t.error);
     }
   }
@@ -213,7 +214,7 @@ export default function GuestRoom() {
       {/* Tab content */}
       <div style={{ padding: '16px' }}>
         {tab === 'search' && (
-          <SongSearch bannedIds={bannedIds} onSelect={handleSelect} />
+          <SongSearch bannedIds={bannedIds} onSelect={handleSelect} vibeDescription={venue.vibe_description ?? ''} />
         )}
 
         {tab === 'queue' && (

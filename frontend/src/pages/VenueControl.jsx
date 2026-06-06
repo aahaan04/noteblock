@@ -10,7 +10,7 @@ import NowPlaying from '../components/NowPlaying.jsx';
 import VenueQRCode from '../components/VenueQRCode.jsx';
 import SongSearch from '../components/SongSearch.jsx';
 
-const TABS = ['queue', 'player', 'vibe', 'ban', 'gift', 'stats', 'qr'];
+const TABS = ['queue', 'player', 'vibe', 'ban', 'users', 'gift', 'stats', 'qr'];
 
 export default function VenueControl() {
   const { id } = useParams();
@@ -259,6 +259,7 @@ export default function VenueControl() {
               { key: 'queue', label: `${t.queue} (${pendingQueue.length})` },
               { key: 'vibe', label: t.vibe },
               { key: 'ban', label: t.bannedSongs },
+              { key: 'users', label: '👥 Users' },
               { key: 'gift', label: t.giftCredits },
               { key: 'stats', label: t.stats },
               { key: 'qr', label: 'QR' },
@@ -295,7 +296,11 @@ export default function VenueControl() {
             )}
 
             {tab === 'ban' && (
-              <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />
+              <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} vibeDescription={venue.vibe_description ?? ''} />
+            )}
+
+            {tab === 'users' && (
+              <UsersPanel venueId={id} token={token} />
             )}
 
             {tab === 'gift' && (
@@ -386,7 +391,7 @@ function VibeSettings({ venue, onUpdate }) {
 
 // ── Ban manager ──────────────────────────────────────────────────────────────
 
-function BanManager({ venueId, token, banned, bannedIds, onReload }) {
+function BanManager({ venueId, token, banned, bannedIds, onReload, vibeDescription }) {
   const { t } = useLang();
   const [selected, setSelected] = useState(null);
 
@@ -408,7 +413,7 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
   return (
     <div>
       <h3 style={{ marginTop: 0 }}>{t.banSong}</h3>
-      <SongSearch bannedIds={bannedIds} onSelect={setSelected} />
+      <SongSearch bannedIds={bannedIds} onSelect={setSelected} vibeDescription={vibeDescription} />
 
       {selected && (
         <div style={{
@@ -503,6 +508,142 @@ function StatsPanel({ stats }) {
           <span style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{s.count}×</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Users panel ──────────────────────────────────────────────────────────────
+
+function UsersPanel({ venueId, token }) {
+  const [users, setUsers] = useState([]);
+  const [bannedUsers, setBannedUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all'); // 'all' | 'banned'
+  const [banningName, setBanningName] = useState(null); // name pending confirm
+
+  async function load() {
+    setLoading(true);
+    try {
+      const data = await api.venues.users(venueId, token);
+      setUsers(data.users ?? []);
+      setBannedUsers(data.bannedUsers ?? []);
+    } catch {}
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []); // eslint-disable-line
+
+  async function handleBan(name) {
+    await api.venues.banUser(venueId, { requester_name: name }, token).catch(() => {});
+    setBanningName(null);
+    load();
+  }
+
+  async function handleUnban(id) {
+    await api.venues.unbanUser(venueId, id, token).catch(() => {});
+    load();
+  }
+
+  const displayed = filter === 'banned' ? users.filter(u => u.banned) : users;
+
+  if (loading) return <p style={{ color: 'var(--text-muted)' }}>Loading users…</p>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h3 style={{ margin: 0 }}>👥 Room Users</h3>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {['all', 'banned'].map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+              background: filter === f ? 'var(--accent)' : 'var(--surface)',
+              color: filter === f ? '#fff' : 'var(--text-muted)',
+            }}>
+              {f === 'all' ? `All (${users.length})` : `Banned (${users.filter(u => u.banned).length})`}
+            </button>
+          ))}
+          <button onClick={load} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
+            ↻
+          </button>
+        </div>
+      </div>
+
+      {!displayed.length && (
+        <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 32 }}>
+          {filter === 'banned' ? 'No banned users' : 'No song requests yet — users will appear here once they request songs'}
+        </p>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {displayed.map(u => (
+          <div key={u.name} style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            background: u.banned ? 'rgba(248,113,113,0.06)' : 'var(--surface)',
+            border: `1px solid ${u.banned ? 'rgba(248,113,113,0.3)' : 'var(--border)'}`,
+            borderRadius: 10, padding: '10px 14px',
+          }}>
+            {/* Avatar */}
+            <div style={{
+              width: 36, height: 36, borderRadius: '50%',
+              background: u.banned ? 'rgba(248,113,113,0.2)' : 'rgba(99,102,241,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, flexShrink: 0,
+            }}>
+              {u.banned ? '🚫' : '🎵'}
+            </div>
+
+            {/* Info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {u.name}
+                {u.banned && (
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, background: 'rgba(248,113,113,0.2)', color: '#f87171' }}>
+                    BANNED
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {u.requests} {u.requests === 1 ? 'song' : 'songs'} · {u.credits} credits spent
+              </div>
+            </div>
+
+            {/* Action */}
+            {u.banned ? (
+              <button
+                onClick={() => handleUnban(bannedUsers.find(b => b.requester_name === u.name)?.id)}
+                style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #34d399', background: 'none', color: '#34d399', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                ✓ Unban
+              </button>
+            ) : (
+              <button
+                onClick={() => setBanningName(u.name)}
+                style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid rgba(248,113,113,0.4)', background: 'none', color: '#f87171', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                🚫 Ban
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Ban confirm modal */}
+      {banningName && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+          <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 14, padding: 24, maxWidth: 340, width: '100%' }}>
+            <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 16 }}>Ban "{banningName}"?</p>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-muted)' }}>
+              They won't be able to request songs in this room anymore.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn-primary" style={{ flex: 1, background: '#f87171' }} onClick={() => handleBan(banningName)}>
+                🚫 Ban
+              </button>
+              <button className="btn-secondary" onClick={() => setBanningName(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

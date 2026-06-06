@@ -65,6 +65,15 @@ router.post('/', optionalAuth, async (req, res) => {
     return res.status(400).json({ error: 'jukebox_paused' });
   }
 
+  // Check if requester is banned
+  const { data: bannedUser } = await supabaseAdmin
+    .from('banned_users')
+    .select('id')
+    .eq('venue_id', req.params.venueId)
+    .eq('requester_name', requester_name)
+    .maybeSingle();
+  if (bannedUser) return res.status(403).json({ error: 'user_banned' });
+
   // Calculate credits to charge
   let credits_to_charge = play_type === 'normal' ? 2 : 0;
   if (play_type === 'quick') {

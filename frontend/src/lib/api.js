@@ -31,6 +31,9 @@ export const api = {
       remove: (venueId, songId, t) => del(`/api/venues/${venueId}/banned/${songId}`, t),
     },
     gift: (venueId, body, t) => post(`/api/venues/${venueId}/gift`, body, t),
+    users: (venueId, t) => get(`/api/venues/${venueId}/users`, t),
+    banUser: (venueId, body, t) => post(`/api/venues/${venueId}/banned-users`, body, t),
+    unbanUser: (venueId, bannedUserId, t) => del(`/api/venues/${venueId}/banned-users/${bannedUserId}`, t),
   },
 
   queue: {
@@ -44,6 +47,7 @@ export const api = {
 
   youtube: {
     search: (q) => get(`/api/youtube/search?q=${encodeURIComponent(q)}`),
+    suggestions: (vibe) => get(`/api/youtube/suggestions?vibe=${encodeURIComponent(vibe)}`),
     vibe: (description, limit = 50) =>
       get(`/api/youtube/vibe?description=${encodeURIComponent(description)}&limit=${limit}`),
     playlist: (playlistId) => get(`/api/youtube/playlist?playlistId=${playlistId}`),
