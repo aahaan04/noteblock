@@ -235,12 +235,13 @@ router.delete('/:id/users/:name', requireAuth, async (req, res) => {
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
   const name = decodeURIComponent(req.params.name);
+  // Delete all their items except currently-playing (don't interrupt playback)
   const { error } = await supabaseAdmin
     .from('queue_items')
     .delete()
     .eq('venue_id', req.params.id)
     .eq('requester_name', name)
-    .eq('status', 'pending');
+    .neq('status', 'playing');
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });

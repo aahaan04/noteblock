@@ -366,9 +366,10 @@ function StatCard({ label, value }) {
 function UsersPanel({ venueId, token }) {
   const [users, setUsers] = useState([]);
   const [bannedUsers, setBannedUsers] = useState([]);
+  const [onlineUsers, setOnlineUsers] = useState([]); // from Supabase Presence
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
-  const [modal, setModal] = useState(null); // { type: 'ban'|'gift', user }
+  const [modal, setModal] = useState(null); // { type: 'ban'|'gift'|'remove', user }
   const [giftAmount, setGiftAmount] = useState(10);
   const [giftMsg, setGiftMsg] = useState('');
   const [openMenu, setOpenMenu] = useState(null);
@@ -384,19 +385,38 @@ function UsersPanel({ venueId, token }) {
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
-  // Real-time: reload whenever someone new requests a song in this room
+  // Real-time: reload when a new queue_items row is inserted (no filter — filtered
+  // subscriptions need special Supabase publication config; check venue_id in callback)
   useEffect(() => {
     if (!venueId) return;
     const sub = supabase
-      .channel(`users-panel-${venueId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'queue_items',
-        filter: `venue_id=eq.${venueId}`,
-      }, () => load())
+      .channel(`users-panel-queue-${venueId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'queue_items' },
+        (payload) => { if (payload.new?.venue_id === venueId) load(); })
       .subscribe();
     return () => supabase.removeChannel(sub);
+  }, [venueId]);
+
+  // Presence: track who's currently in the room (shows up instantly when they open GuestRoom)
+  useEffect(() => {
+    if (!venueId) return;
+    const ch = supabase.channel(`presence-${venueId}`);
+
+    const sync = () => {
+      const state = ch.presenceState();
+      // Each key maps to an array of presences (multiple tabs); flatten + dedupe by name
+      const all = Object.values(state).flat();
+      const seen = new Set();
+      const unique = all.filter(p => { if (seen.has(p.name)) return false; seen.add(p.name); return true; });
+      setOnlineUsers(unique);
+    };
+
+    ch.on('presence', { event: 'sync' }, sync)
+      .on('presence', { event: 'join' }, sync)
+      .on('presence', { event: 'leave' }, sync)
+      .subscribe();
+
+    return () => supabase.removeChannel(ch);
   }, [venueId]);
 
   useEffect(() => {
@@ -433,7 +453,19 @@ function UsersPanel({ venueId, token }) {
     }
   }
 
-  const displayed = filter === 'banned' ? users.filter(u => u.banned) : users;
+  // Merge online presence users with historical requesters
+  // onlineNames: Set of names currently in the room (from presence)
+  const onlineNames = new Set(onlineUsers.map(u => u.name));
+
+  // Build combined list: start with historical users (have requests), then add
+  // online-only users (in room but haven't requested yet), skipping duplicates
+  const historicalNames = new Set(users.map(u => u.name));
+  const onlineOnly = onlineUsers
+    .filter(p => !historicalNames.has(p.name))
+    .map(p => ({ name: p.name, requests: 0, credits: 0, isRegistered: p.isRegistered, banned: false, onlineOnly: true }));
+
+  const allUsers = [...users, ...onlineOnly];
+  const displayed = filter === 'banned' ? allUsers.filter(u => u.banned) : allUsers;
 
   if (loading) return <p style={{ color: '#8B6F52' }}>Loading users…</p>;
 
@@ -442,6 +474,11 @@ function UsersPanel({ venueId, token }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <h3 style={{ margin: 0, color: '#F0E6D3', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Users size={18} color="#FF6B35" /> Room Users
+          {onlineUsers.length > 0 && (
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
+              {onlineUsers.length} online
+            </span>
+          )}
         </h3>
         <div style={{ display: 'flex', gap: 6 }}>
           {['all', 'banned'].map(f => (
@@ -450,7 +487,7 @@ function UsersPanel({ venueId, token }) {
               background: filter === f ? '#FF6B35' : '#1A1008',
               color: filter === f ? '#F0E6D3' : '#8B6F52',
             }}>
-              {f === 'all' ? `All (${users.length})` : `Banned (${users.filter(u => u.banned).length})`}
+              {f === 'all' ? `All (${allUsers.length})` : `Banned (${allUsers.filter(u => u.banned).length})`}
             </button>
           ))}
           <button onClick={load} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #2A1F17', background: 'none', color: '#8B6F52', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
@@ -461,29 +498,39 @@ function UsersPanel({ venueId, token }) {
 
       {!displayed.length && (
         <p style={{ color: '#8B6F52', textAlign: 'center', marginTop: 32 }}>
-          {filter === 'banned' ? 'No banned users' : 'No song requests yet — users will appear here once they request songs'}
+          {filter === 'banned' ? 'No banned users' : 'Waiting for guests to join…'}
         </p>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {displayed.map(u => {
+          const isOnline = onlineNames.has(u.name);
           const initial = u.name && u.name !== 'Guest' ? u.name[0].toUpperCase() : '?';
           return (
             <div key={u.name} style={{
               display: 'flex', alignItems: 'center', gap: 12,
               background: u.banned ? 'rgba(248,113,113,0.06)' : '#1A1008',
-              border: `1px solid ${u.banned ? 'rgba(248,113,113,0.3)' : '#2A1F17'}`,
+              border: `1px solid ${u.banned ? 'rgba(248,113,113,0.3)' : isOnline ? 'rgba(52,211,153,0.25)' : '#2A1F17'}`,
               borderRadius: 10, padding: '10px 14px', position: 'relative',
             }}>
-              {/* Avatar */}
-              <div style={{
-                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                background: u.banned ? 'rgba(248,113,113,0.15)' : u.isRegistered ? 'rgba(255,107,53,0.15)' : 'rgba(90,69,53,0.3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 15, fontWeight: 700,
-                color: u.banned ? '#f87171' : u.isRegistered ? '#FF6B35' : '#8B6F52',
-              }}>
-                {u.banned ? <Ban size={16} /> : initial}
+              {/* Avatar with online dot */}
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: u.banned ? 'rgba(248,113,113,0.15)' : u.isRegistered ? 'rgba(255,107,53,0.15)' : 'rgba(90,69,53,0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 15, fontWeight: 700,
+                  color: u.banned ? '#f87171' : u.isRegistered ? '#FF6B35' : '#8B6F52',
+                }}>
+                  {u.banned ? <Ban size={16} /> : initial}
+                </div>
+                {isOnline && (
+                  <div style={{
+                    position: 'absolute', bottom: 0, right: 0,
+                    width: 10, height: 10, borderRadius: '50%',
+                    background: '#34d399', border: '2px solid #1A1008',
+                  }} />
+                )}
               </div>
 
               {/* Info */}
@@ -506,7 +553,7 @@ function UsersPanel({ venueId, token }) {
                   )}
                 </div>
                 <div style={{ fontSize: 12, color: '#8B6F52' }}>
-                  {u.requests} {u.requests === 1 ? 'song' : 'songs'} · {u.credits} credits spent
+                  {u.onlineOnly ? 'Just joined · no requests yet' : `${u.requests} ${u.requests === 1 ? 'song' : 'songs'} · ${u.credits} credits spent`}
                 </div>
               </div>
 

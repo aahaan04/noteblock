@@ -67,6 +67,19 @@ export default function GuestRoom() {
     return () => supabase.removeChannel(sub);
   }, [venue]);
 
+  // Presence: broadcast this user's identity to the host the moment they open the room
+  useEffect(() => {
+    if (!venue) return;
+    const name = profile?.display_name ?? localStorage.getItem('nb_guest_name') ?? 'Guest';
+    const ch = supabase.channel(`presence-${venue.id}`);
+    ch.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await ch.track({ name, isRegistered: !!token, ts: Date.now() });
+      }
+    });
+    return () => supabase.removeChannel(ch);
+  }, [venue?.id, !!token]);
+
   const handleSelect = useCallback(async (song) => {
     const isBanned = banned.some(b => b.youtube_video_id === song.videoId);
     if (isBanned) { showToast(t.songBanned); return; }
