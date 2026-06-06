@@ -6,7 +6,7 @@ import { api } from '../lib/api.js';
 
 export default function GuestJoin() {
   const { roomCode } = useParams();
-  const { profile, token } = useAuth();
+  const { profile, token, refreshProfile } = useAuth();
   const { t, lang, setLang } = useLang();
   const navigate = useNavigate();
 
@@ -37,6 +37,7 @@ export default function GuestJoin() {
     // Grant welcome credits for logged-in guests
     if (token && profile?.role !== 'host') {
       await api.users.welcome(venue.id, token).catch(() => {});
+      await refreshProfile(); // sync updated credits_balance into auth context
     }
 
     // Anonymous: give session credits

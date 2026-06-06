@@ -352,20 +352,21 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   // ── YouTube IFrame API ────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     if (window.YT?.Player) { setYtReady(true); return; }
 
-    const existing = document.querySelector('script[src*="youtube.com/iframe_api"]');
-    if (!existing) {
+    window.onYouTubeIframeAPIReady = () => setYtReady(true);
+
+    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
       const tag = document.createElement('script');
       tag.src = 'https://www.youtube.com/iframe_api';
       document.head.appendChild(tag);
     }
-    const prev = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
-      prev?.();
-      setYtReady(true);
-    };
+
+    // Fallback: poll in case the callback already fired before we registered it
+    const poll = setInterval(() => {
+      if (window.YT?.Player) { setYtReady(true); clearInterval(poll); }
+    }, 200);
+    return () => clearInterval(poll);
   }, []);
 
   useEffect(() => {
