@@ -97,6 +97,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     if (!player || !entry) return;
     try {
       player.loadVideoById(entry.videoId);
+      player.unMute();
       player.setVolume(100);
     } catch {}
   }
@@ -137,6 +138,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       // Load and start the incoming player
       try {
         inPlayer.loadVideoById(targetEntry.videoId);
+        inPlayer.unMute();
         inPlayer.setVolume(0);
         inPlayer.playVideo();
       } catch {}
@@ -315,6 +317,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       // Start inactive (now active) player
       try {
         const ap = S.current.active === 'A' ? pA.current : pB.current;
+        ap?.unMute();
         ap?.playVideo();
         ap?.setVolume(100);
       } catch {}
@@ -347,7 +350,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       S.current.active = newActive;
       setDisplayActive(newActive);
       const ap = S.current.active === 'A' ? pA.current : pB.current;
-      try { ap?.loadVideoById(next.videoId); ap?.setVolume(100); } catch {}
+      try { ap?.loadVideoById(next.videoId); ap?.unMute(); ap?.setVolume(100); } catch {}
       S.current.current = next;
       S.current.mode = next.type;
       const afterNext = computeNext(next);
