@@ -97,6 +97,11 @@ export default function GuestRoom() {
 
   async function handleConfirm(playType) {
     if (!selected || !venue) return;
+    if (venue.jukebox_paused) {
+      showToast('⏸ Jukebox is paused — try again soon');
+      setSelected(null);
+      return;
+    }
     const cost = playType === 'normal' ? 2 : quickPrice;
 
     if (credits < cost) {
@@ -170,6 +175,13 @@ export default function GuestRoom() {
         </div>
         <CreditBalance balance={credits} anonymous={isAnon} />
       </div>
+
+      {/* Paused banner */}
+      {venue.jukebox_paused && (
+        <div style={{ background: 'rgba(245,158,11,0.12)', borderBottom: '1px solid #f59e0b', padding: '10px 16px', fontSize: 13, color: '#f59e0b', textAlign: 'center' }}>
+          ⏸ The jukebox is paused — song requests are temporarily disabled
+        </div>
+      )}
 
       {/* Now playing */}
       <div style={{ padding: '12px 16px' }}>

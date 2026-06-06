@@ -207,6 +207,7 @@ export default function VenueControl() {
             vibeVideos={vibeVideos}
             vibeEnabled={venue.vibe_mode_enabled}
             crossfadeSecs={venue.crossfade_duration_seconds}
+            jukeboxPaused={venue.jukebox_paused ?? false}
             onMarkPlaying={handleMarkPlaying}
             onMarkPlayed={handleMarkPlayed}
             onNowPlaying={setNowPlaying}
@@ -216,21 +217,38 @@ export default function VenueControl() {
           <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
 
           <div style={{ display: 'flex', gap: 10 }}>
-            {!nowPlaying && pendingQueue.length > 0 && (
+            {/* Pause / Resume jukebox */}
+            <button
+              className="btn-secondary"
+              style={{ flex: 1, fontSize: 13, borderColor: venue.jukebox_paused ? '#f59e0b' : undefined, color: venue.jukebox_paused ? '#f59e0b' : undefined }}
+              onClick={() => handleVenueUpdate({ jukebox_paused: !venue.jukebox_paused })}
+            >
+              {venue.jukebox_paused ? '▶ Resume Jukebox' : '⏸ Pause Jukebox'}
+            </button>
+
+            {/* Start / Skip */}
+            {!nowPlaying && !venue.jukebox_paused && (
               <button
                 className="btn-primary"
-                style={{ flex: 1, fontSize: 14, background: '#22c55e' }}
+                style={{ flex: 1, fontSize: 13, background: '#22c55e' }}
                 onClick={() => playerRef.current?.start()}
               >
                 ▶ Start Player
               </button>
             )}
-            {nowPlaying && (
-              <button className="btn-primary" style={{ flex: 1, fontSize: 14, opacity: skipping ? 0.5 : 1 }} onClick={handleSkip} disabled={skipping}>
+            {nowPlaying && !venue.jukebox_paused && (
+              <button className="btn-primary" style={{ flex: 1, fontSize: 13, opacity: skipping ? 0.5 : 1 }} onClick={handleSkip} disabled={skipping}>
                 ⏭ {skipping ? 'Skipping…' : t.skip}
               </button>
             )}
           </div>
+
+          {/* Paused banner */}
+          {venue.jukebox_paused && (
+            <div style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid #f59e0b', borderRadius: 10, padding: '10px 16px', fontSize: 13, color: '#f59e0b', textAlign: 'center' }}>
+              ⏸ Jukebox is paused — guests cannot request songs
+            </div>
+          )}
         </div>
 
         {/* Right — tabbed panels */}
