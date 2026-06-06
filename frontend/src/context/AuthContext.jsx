@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
-import { api } from '../lib/api.js';
 
 const AuthContext = createContext(null);
 
@@ -12,25 +11,44 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (data.session) loadProfile(data.session.access_token);
+      if (data.session) loadProfile(data.session.user.id);
       else setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess);
-      if (sess) loadProfile(sess.access_token);
+      if (sess) loadProfile(sess.user.id);
       else { setProfile(null); setLoading(false); }
     });
 
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  async function loadProfile(token) {
+  // Load profile directly from Supabase — no backend required
+  async function loadProfile(userId) {
     try {
-      const p = await api.users.profile(token);
-      setProfile(p);
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+      setProfile(data);
     } catch {
-      // profile may not exist yet (trigger handles creation)
+      // Profile may not exist yet right after signup — the DB trigger
+      // creates it asynchronously. Retry once after a short delay.
+      await new Promise(r => setTimeout(r, 1200));
+      try {
+        const { data } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        setProfile(data ?? null);
+      } catch {
+        setProfile(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -65,8 +83,13 @@ export function AuthProvider({ children }) {
   }
 
   async function refreshProfile() {
-    if (!session?.access_token) return;
-    await loadProfile(session.access_token);
+    if (!session?.user?.id) return;
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', session.user.id)
+      .single();
+    if (data) setProfile(data);
   }
 
   const token = session?.access_token ?? null;
