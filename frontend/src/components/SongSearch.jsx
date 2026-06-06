@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { Search, Sparkles, ChevronDown } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useLang } from '../context/LangContext.jsx';
 
@@ -14,7 +15,6 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const debounceRef = useRef(null);
 
-  // Load vibe suggestions once on mount if a vibe description is set
   useEffect(() => {
     if (!vibeDescription) return;
     setSuggestionsLoading(true);
@@ -53,8 +53,8 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
     <div>
       {/* Search input */}
       <div style={{ position: 'relative', marginBottom: 12 }}>
-        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 18, pointerEvents: 'none' }}>
-          🔍
+        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#8B6F52' }}>
+          <Search size={18} />
         </span>
         <input
           type="text"
@@ -64,25 +64,28 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
           style={{
             width: '100%', boxSizing: 'border-box',
             paddingLeft: 40, paddingRight: 16, paddingTop: 12, paddingBottom: 12,
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 10,
-            color: 'var(--text)',
+            background: '#1A1008',
+            border: '1px solid #2A1F17',
+            borderRadius: 7,
+            color: '#F0E6D3',
             fontSize: 15,
             outline: 'none',
+            fontFamily: 'inherit',
+            transition: 'border-color 0.15s',
           }}
+          onFocus={e => e.target.style.borderColor = '#FF6B35'}
+          onBlur={e => e.target.style.borderColor = '#2A1F17'}
         />
       </div>
 
-      {/* Search results */}
       {loading && (
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem 0' }}>
+        <div style={{ textAlign: 'center', color: '#8B6F52', padding: '1rem 0' }}>
           {t.searching}
         </div>
       )}
 
       {!loading && query && results.length === 0 && (
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem 0' }}>
+        <div style={{ textAlign: 'center', color: '#8B6F52', padding: '1rem 0' }}>
           {t.noResults}
         </div>
       )}
@@ -96,12 +99,14 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
             <button
               onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
               style={{
-                padding: '10px', borderRadius: 8, border: '1px dashed var(--border)',
-                background: 'transparent', color: 'var(--text-muted)',
+                padding: '10px', borderRadius: 7, border: '1px dashed #2A1F17',
+                background: 'transparent', color: '#8B6F52',
                 cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}
             >
-              Load {Math.min(results.length - visibleCount, PAGE_SIZE)} more results ↓
+              <ChevronDown size={16} />
+              Load {Math.min(results.length - visibleCount, PAGE_SIZE)} more results
             </button>
           )}
         </div>
@@ -109,20 +114,20 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
 
       {/* Vibe suggestions */}
       {vibeDescription && (
-        <div style={{ marginTop: query ? 20 : 0 }}>
+        <div style={{ marginTop: query && results.length ? 20 : 0 }}>
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-            fontSize: 12, fontWeight: 700, color: 'var(--accent)',
+            display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
+            fontSize: 11, fontWeight: 700, color: '#C89B6E',
             textTransform: 'uppercase', letterSpacing: '0.06em',
           }}>
-            <span>✨</span>
+            <Sparkles size={13} />
             <span>Suggested for this vibe</span>
           </div>
           {suggestionsLoading && (
-            <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>Loading suggestions…</div>
+            <div style={{ color: '#8B6F52', fontSize: 13, padding: '8px 0' }}>Loading suggestions…</div>
           )}
           {!suggestionsLoading && suggestions.length === 0 && (
-            <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>No suggestions available</div>
+            <div style={{ color: '#5A4535', fontSize: 13, padding: '8px 0' }}>No suggestions available</div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {suggestions.map(r => (
@@ -141,8 +146,8 @@ function SongCard({ song, onSelect, accent }) {
       onClick={() => onSelect(song)}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        background: accent ? 'rgba(99,102,241,0.06)' : 'var(--surface)',
-        border: `1px solid ${accent ? 'rgba(99,102,241,0.25)' : 'var(--border)'}`,
+        background: accent ? 'rgba(200,155,110,0.06)' : '#1A1008',
+        border: `1px solid ${accent ? 'rgba(200,155,110,0.2)' : '#2A1F17'}`,
         borderRadius: 10,
         padding: '10px 14px',
         textAlign: 'left',
@@ -150,8 +155,8 @@ function SongCard({ song, onSelect, accent }) {
         width: '100%',
         transition: 'border-color 0.15s',
       }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = accent ? 'rgba(99,102,241,0.25)' : 'var(--border)'}
+      onMouseEnter={e => e.currentTarget.style.borderColor = '#FF6B35'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = accent ? 'rgba(200,155,110,0.2)' : '#2A1F17'}
     >
       {song.thumbnail && (
         <img
@@ -161,14 +166,10 @@ function SongCard({ song, onSelect, accent }) {
         />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontWeight: 600, fontSize: 14,
-          color: 'var(--text)',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>
+        <div style={{ fontWeight: 600, fontSize: 14, color: '#F0E6D3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {song.title}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 12, color: '#8B6F52' }}>
           {song.channel}
           {song.duration && ` · ${song.duration}`}
         </div>

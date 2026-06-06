@@ -1,14 +1,14 @@
+import { Zap, X } from 'lucide-react';
 import { useLang } from '../context/LangContext.jsx';
 
 export default function QueueDisplay({ items, isHost, onRemove, onSkip, nowPlaying }) {
   const { t } = useLang();
 
-  const playing = items.find(i => i.status === 'playing');
   const pending = items.filter(i => i.status === 'pending');
 
-  if (!playing && !pending.length) {
+  if (!pending.length) {
     return (
-      <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem 0' }}>
+      <div style={{ textAlign: 'center', color: '#8B6F52', padding: '2rem 0' }}>
         {t.emptyQueue}
       </div>
     );
@@ -36,12 +36,13 @@ function QueueItem({ item, position, isHost, onRemove }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
-      background: 'var(--surface)',
-      border: `1px solid ${isQuick ? 'var(--accent)' : 'var(--border)'}`,
+      background: '#1A1008',
+      border: `1px solid ${isQuick ? '#FF6B35' : '#2A1F17'}`,
       borderRadius: 10,
       padding: '10px 14px',
+      boxShadow: isQuick ? '0 0 10px rgba(255,107,53,0.12)' : 'none',
     }}>
-      <span style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', minWidth: 20 }}>
+      <span style={{ color: '#5A4535', fontVariantNumeric: 'tabular-nums', minWidth: 20, fontSize: 13 }}>
         {position}
       </span>
       {item.thumbnail_url && (
@@ -52,33 +53,36 @@ function QueueItem({ item, position, isHost, onRemove }) {
         />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3' }}>
           {item.song_title}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 12, color: '#8B6F52' }}>
           {t.requestedBy} {item.requester_name ?? 'Guest'}
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         {isQuick && (
           <span style={{
-            background: 'var(--accent)',
-            color: '#fff',
+            background: '#FF6B35',
+            color: '#F0E6D3',
             fontSize: 10,
             fontWeight: 700,
             padding: '2px 7px',
             borderRadius: 999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 3,
           }}>
-            QUICK
+            <Zap size={10} /> QUICK
           </span>
         )}
         {isHost && (
           <button
             onClick={() => onRemove(item.id)}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}
+            style={{ background: 'none', border: 'none', color: '#5A4535', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
             title={t.removeFromQueue}
           >
-            ✕
+            <X size={16} />
           </button>
         )}
       </div>

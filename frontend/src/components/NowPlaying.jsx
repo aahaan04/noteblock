@@ -1,3 +1,4 @@
+import { Music, Play } from 'lucide-react';
 import { useLang } from '../context/LangContext.jsx';
 
 export default function NowPlaying({ nowPlaying, vibeActive }) {
@@ -11,24 +12,27 @@ export default function NowPlaying({ nowPlaying, vibeActive }) {
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, var(--surface) 0%, rgba(99,102,241,0.12) 100%)',
-      border: '1px solid var(--border)',
-      borderRadius: 12,
+      background: 'linear-gradient(135deg, #1A1008 0%, rgba(255,107,53,0.06) 100%)',
+      border: '1px solid #FF6B35',
+      borderRadius: 10,
       padding: '14px 18px',
       display: 'flex',
       alignItems: 'center',
       gap: 14,
+      boxShadow: '0 0 20px rgba(255,107,53,0.1)',
     }}>
-      <span style={{ fontSize: 28 }}>{isVibe ? '🎵' : '▶️'}</span>
+      <div style={{ color: '#FF6B35', flexShrink: 0 }}>
+        {isVibe ? <Music size={22} /> : <Play size={22} />}
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#FF6B35', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>
           {isVibe ? t.vibeMode : t.nowPlaying}
         </div>
-        <div style={{ fontWeight: 700, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text)' }}>
+        <div style={{ fontWeight: 700, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3' }}>
           {title}
         </div>
         {requester && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 12, color: '#8B6F52' }}>
             {t.requestedBy} {requester}
           </div>
         )}
@@ -40,7 +44,7 @@ export default function NowPlaying({ nowPlaying, vibeActive }) {
             key={i}
             style={{
               width: 3,
-              background: 'var(--accent)',
+              background: '#FF6B35',
               borderRadius: 2,
               animation: `bar${i} 0.8s ease-in-out infinite alternate`,
               height: `${[12, 20, 16, 10][i - 1]}px`,

@@ -1,13 +1,21 @@
-/* ── Noteblock Global Styles ─────────────────────────────────────── */
+/* ── Noteblock Design System ─────────────────────────────────────── */
 
 :root {
-  --bg: #0f0f13;
-  --surface: #1a1a24;
-  --border: #2a2a38;
-  --text: #f0f0f8;
-  --text-muted: #888898;
-  --accent: #6366f1;
-  --accent2: #a855f7;
+  /* Backgrounds */
+  --bg:        #120C06;
+  --surface:   #1A1008;
+  --border:    #2A1F17;
+
+  /* Brand & Accents */
+  --accent:    #FF6B35;
+  --accent2:   #C89B6E;
+  --logo:      #6B4226;
+  --normal-play: #3D2B1A;
+
+  /* Text */
+  --text:       #F0E6D3;
+  --text-muted: #8B6F52;
+  --text-faint: #5A4535;
 }
 
 *, *::before, *::after {
@@ -20,7 +28,7 @@ html, body, #root {
 }
 
 body {
-  background: var(--bg);
+  background: #0E0A07;
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -35,19 +43,24 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
+  background: #0E0A07;
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: #F0E6D3;
   border: none;
-  border-radius: 10px;
+  border-radius: 7px;
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: opacity 0.15s;
   font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -63,13 +76,17 @@ body {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 7px;
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: border-color 0.15s;
   font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .btn-secondary:hover {
@@ -80,7 +97,7 @@ body {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 7px;
   padding: 12px 14px;
   font-size: 15px;
   font-family: inherit;
