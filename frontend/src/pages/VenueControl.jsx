@@ -5,10 +5,7 @@ import {
   Ban, Users, BarChart2, QrCode, RefreshCw, MoreHorizontal,
   Gift, Check, X, ChevronUp, ChevronDown, Save,
 } from 'lucide-react';
-
-const Logo = ({ size = 20 }) => (
-  <img src="/logo.png" alt="Noteblock" style={{ width: size, height: size, imageRendering: 'pixelated' }} />
-);
+import Logo from '../components/Logo.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { api } from '../lib/api.js';

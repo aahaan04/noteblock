@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings, LogOut, Plus, QrCode, ChevronUp, ChevronDown, Home } from 'lucide-react';
-
-const Logo = ({ size = 26 }) => (
-  <img src="/logo.png" alt="Noteblock" style={{ width: size, height: size, imageRendering: 'pixelated' }} />
-);
+import Logo from '../components/Logo.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { supabase } from '../lib/supabase.js';
