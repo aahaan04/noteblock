@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../lib/supabase.js';
-import { requireAuth, optionalAuth } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = Router({ mergeParams: true }); // gets :venueId from parent
 
@@ -37,15 +37,14 @@ router.get('/price', async (req, res) => {
   res.json({ price: quickPlayPrice(count ?? 0), queue_length: count ?? 0 });
 });
 
-// POST /api/venues/:venueId/queue — add song to queue
-router.post('/', optionalAuth, async (req, res) => {
+// POST /api/venues/:venueId/queue — add song to queue (requires auth)
+router.post('/', requireAuth, async (req, res) => {
   const {
     youtube_video_id,
     song_title,
     thumbnail_url,
     play_type = 'normal',
     requester_name = 'Guest',
-    anonymous_credits, // for anonymous guests: pre-deducted client-side
   } = req.body;
 
   if (!youtube_video_id || !song_title) {
@@ -85,51 +84,21 @@ router.post('/', optionalAuth, async (req, res) => {
     credits_to_charge = quickPlayPrice(count ?? 0);
   }
 
-  // For logged-in users: atomic credit deduction via stored procedure
-  if (req.user) {
-    const { data, error } = await supabaseAdmin.rpc('request_song', {
-      p_venue_id: req.params.venueId,
-      p_user_id: req.user.id,
-      p_youtube_video_id: youtube_video_id,
-      p_song_title: song_title,
-      p_thumbnail_url: thumbnail_url ?? null,
-      p_requester_name: requester_name,
-      p_play_type: play_type,
-      p_credits_to_charge: credits_to_charge,
-    });
-
-    if (error) return res.status(500).json({ error: error.message });
-    if (!data.success) return res.status(400).json({ error: data.error, credits_needed: credits_to_charge });
-    return res.status(201).json({ success: true, queue_item_id: data.queue_item_id, credits_charged: credits_to_charge });
-  }
-
-  // Anonymous guest — credits managed client-side
-  // Check ban list
-  const { data: banned } = await supabaseAdmin
-    .from('banned_songs')
-    .select('id')
-    .eq('venue_id', req.params.venueId)
-    .eq('youtube_video_id', youtube_video_id)
-    .single();
-
-  if (banned) return res.status(400).json({ error: 'song_banned' });
-
-  const { data: item, error } = await supabaseAdmin
-    .from('queue_items')
-    .insert({
-      venue_id: req.params.venueId,
-      youtube_video_id,
-      song_title,
-      thumbnail_url: thumbnail_url ?? null,
-      requester_name,
-      play_type,
-      credits_charged: credits_to_charge,
-    })
-    .select()
-    .single();
+  // Atomic credit deduction via stored procedure
+  const { data, error } = await supabaseAdmin.rpc('request_song', {
+    p_venue_id: req.params.venueId,
+    p_user_id: req.user.id,
+    p_youtube_video_id: youtube_video_id,
+    p_song_title: song_title,
+    p_thumbnail_url: thumbnail_url ?? null,
+    p_requester_name: requester_name,
+    p_play_type: play_type,
+    p_credits_to_charge: credits_to_charge,
+  });
 
   if (error) return res.status(500).json({ error: error.message });
-  res.status(201).json({ success: true, queue_item_id: item.id, credits_charged: credits_to_charge });
+  if (!data.success) return res.status(400).json({ error: data.error, credits_needed: credits_to_charge });
+  return res.status(201).json({ success: true, queue_item_id: data.queue_item_id, credits_charged: credits_to_charge });
 });
 
 // PATCH /api/venues/:venueId/queue/:itemId — update status (host only)

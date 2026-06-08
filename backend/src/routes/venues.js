@@ -160,9 +160,9 @@ router.post('/:id/gift', requireAuth, async (req, res) => {
     .eq('id', req.params.id).eq('host_id', req.user.id).single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
-  // Find the recipient by display_name
+  // Find the recipient by display_name (table is 'users', not 'profiles')
   const { data: profile } = await supabaseAdmin
-    .from('profiles')
+    .from('users')
     .select('id, credits_balance')
     .eq('display_name', guest_identifier)
     .maybeSingle();
@@ -214,7 +214,7 @@ router.get('/:id/users', requireAuth, async (req, res) => {
   let registeredNames = new Set();
   if (requesterNames.length) {
     const { data: profiles } = await supabaseAdmin
-      .from('profiles')
+      .from('users')
       .select('display_name')
       .in('display_name', requesterNames);
     registeredNames = new Set((profiles ?? []).map(p => p.display_name));

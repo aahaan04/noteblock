@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, LogOut } from 'lucide-react';
+import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { api } from '../lib/api.js';
@@ -74,6 +75,7 @@ export default function Settings() {
           <LogOut size={16} /> {t.logout}
         </button>
       )}
+      <VersionFooter />
     </div>
   );
 }

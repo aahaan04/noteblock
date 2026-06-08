@@ -1,199 +1,232 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Music, Globe, AlertTriangle, User, ArrowRight, Coins, Edit2 } from 'lucide-react';
+import { Phone, KeyRound, User, ArrowRight, Music, RotateCcw } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
+import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useLang } from '../context/LangContext.jsx';
+import { supabase } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
 
+// phase: 'phone' | 'otp' | 'name' | 'joining'
 export default function GuestJoin() {
   const { roomCode } = useParams();
-  const { profile, token, refreshProfile } = useAuth();
-  const { t, lang, setLang } = useLang();
+  const { profile, token, sendOtp, verifyPhoneOtp, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const [venue, setVenue] = useState(null);
+  const [venueError, setVenueError] = useState('');
+  const [phase, setPhase] = useState('phone');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
-  const [langChosen, setLangChosen] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [displayName, setDisplayName] = useState(
-    () => profile?.display_name || localStorage.getItem('nb_guest_name') || ''
-  );
+  const [busy, setBusy] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
 
-  useEffect(() => { loadVenue(); }, [roomCode]);
+  // Load venue info
+  useEffect(() => {
+    api.venues.getByCode(roomCode)
+      .then(v => { if (v.status === 'closed') setVenueError('This room is currently closed.'); else setVenue(v); })
+      .catch(() => setVenueError('Room not found.'));
+  }, [roomCode]);
 
-  async function loadVenue() {
-    try {
-      const v = await api.venues.getByCode(roomCode);
-      if (v.status === 'closed') { setError('This room is currently closed.'); return; }
-      setVenue(v);
-    } catch { setError('Room not found.'); }
-  }
+  // Countdown timer for resend
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const id = setTimeout(() => setResendTimer(t => t - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendTimer]);
 
-  async function proceed(nameOverride) {
+  // If already logged in, skip straight to joining
+  useEffect(() => {
+    if (!token || !venue) return;
+    joinRoom();
+  }, [token, venue]);
+
+  async function joinRoom() {
     if (!venue) return;
-    const name = (nameOverride ?? displayName).trim() || 'Guest';
-    localStorage.setItem('nb_guest_name', name);
-
-    if (token && profile?.role !== 'host') {
-      await api.users.welcome(venue.id, token).catch(() => {});
-      await refreshProfile();
-    }
-
-    if (!token) {
-      const creditKey = `nb_credits_granted_${venue.id}`;
-      if (!localStorage.getItem(creditKey)) {
-        const existing = parseInt(localStorage.getItem('nb_anon_credits') ?? '0');
-        localStorage.setItem('nb_anon_credits', String(existing + (venue.welcome_credits ?? 10)));
-        localStorage.setItem(creditKey, '1');
-      }
-    }
-
+    // Grant welcome credits on first visit (RPC is idempotent)
+    await api.users.welcome(venue.id, token).catch(() => {});
+    await refreshProfile();
     navigate(`/room/${roomCode}`);
   }
 
-  if (error) {
-    return (
-      <div className="center-screen">
-        <Music size={48} color="#2A1F17" style={{ marginBottom: 16 }} />
-        <p style={{ color: '#f87171' }}>{error}</p>
-        <button className="btn-secondary" onClick={() => navigate('/')}>← Home</button>
-      </div>
-    );
+  async function handleSendOtp(e) {
+    e?.preventDefault();
+    setError('');
+    const cleaned = phone.trim();
+    if (!cleaned) { setError('Enter your phone number.'); return; }
+    setBusy(true);
+    try {
+      await sendOtp(cleaned);
+      setPhase('otp');
+      setResendTimer(30);
+    } catch (err) {
+      setError(err.message ?? 'Could not send code. Check the number and try again.');
+    } finally { setBusy(false); }
   }
 
-  if (!venue) return <div className="center-screen"><p style={{ color: '#8B6F52' }}>{t.loading}</p></div>;
-
-  // Language selection — only prompt if they haven't chosen yet
-  if (!langChosen && !localStorage.getItem('nb_lang')) {
-    return (
-      <div className="center-screen">
-        <div style={{ textAlign: 'center', maxWidth: 320 }}>
-          <Globe size={48} color="#FF6B35" style={{ marginBottom: 16 }} />
-          <h2 style={{ marginBottom: 8, color: '#F0E6D3' }}>{t.chooseLanguage}</h2>
-          <div style={{ display: 'flex', gap: 12, marginTop: 20, justifyContent: 'center' }}>
-            <button className="btn-primary" style={{ minWidth: 120 }} onClick={() => { setLang('en'); setLangChosen(true); }}>
-              English
-            </button>
-            <button className="btn-secondary" style={{ minWidth: 120 }} onClick={() => { setLang('hi'); setLangChosen(true); }}>
-              हिंदी
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  async function handleVerifyOtp(e) {
+    e?.preventDefault();
+    setError('');
+    if (otp.length < 6) { setError('Enter the 6-digit code.'); return; }
+    setBusy(true);
+    try {
+      await verifyPhoneOtp(phone.trim(), otp.trim());
+      // AuthContext will load/create profile. Wait briefly for it.
+      // If display_name is just the phone number stub, ask for a name.
+      setPhase('name');
+    } catch (err) {
+      setError(err.message ?? 'Invalid code. Try again.');
+    } finally { setBusy(false); }
   }
 
-  // ── Returning anonymous guest — show a fast-path "Welcome back" screen ────────
-  // Only check nb_guest_name (not the venue credit key — iOS Safari wipes it after 7d inactivity)
-  const savedName = localStorage.getItem('nb_guest_name');
-  const alreadyJoined = !token && !!savedName;
-  const savedCredits = parseInt(localStorage.getItem('nb_anon_credits') ?? '0');
-
-  if (alreadyJoined && !editingName) {
-    return (
-      <div className="center-screen">
-        <div style={{ textAlign: 'center', maxWidth: 340 }}>
-          <Logo size={48} style={{ margin: '0 auto 16px' }} />
-          <p style={{ color: '#8B6F52', margin: '0 0 2px', fontSize: 13 }}>{t.welcomeTo}</p>
-          <h1 style={{ margin: '0 0 24px', fontSize: 26, fontWeight: 900, color: '#F0E6D3' }}>{venue.name}</h1>
-
-          {/* Welcome back card */}
-          <div style={{
-            background: 'rgba(255,107,53,0.06)',
-            border: '1px solid rgba(255,107,53,0.25)',
-            borderRadius: 12,
-            padding: '20px 24px',
-            marginBottom: 20,
-            textAlign: 'left',
-          }}>
-            <p style={{ margin: '0 0 4px', fontSize: 13, color: '#8B6F52' }}>Welcome back</p>
-            <p style={{ margin: '0 0 14px', fontSize: 22, fontWeight: 800, color: '#F0E6D3' }}>{savedName}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: '#C89B6E', fontWeight: 600 }}>
-              <Coins size={16} color="#C89B6E" />
-              {savedCredits} credits available
-            </div>
-          </div>
-
-          <button
-            className="btn-primary"
-            style={{ width: '100%', padding: 16, fontSize: 16, marginBottom: 12 }}
-            onClick={() => proceed(savedName)}
-          >
-            Rejoin {venue.name} <ArrowRight size={18} />
-          </button>
-
-          <button
-            style={{
-              background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer',
-              fontSize: 13, display: 'flex', alignItems: 'center', gap: 5, margin: '0 auto',
-            }}
-            onClick={() => setEditingName(true)}
-          >
-            <Edit2 size={13} /> Change name or join fresh
-          </button>
-        </div>
-      </div>
-    );
+  async function handleSetName(e) {
+    e?.preventDefault();
+    setError('');
+    const name = displayName.trim();
+    if (!name) { setError('Enter a display name.'); return; }
+    setBusy(true);
+    try {
+      // Get token from current session (available after OTP verification)
+      const { data: { session } } = await supabase.auth.getSession();
+      const tok = session?.access_token ?? token;
+      await api.users.updateProfile({ display_name: name }, tok);
+      await refreshProfile();
+      await joinRoom();
+    } catch (err) {
+      setError(err.message ?? 'Could not save name.');
+    } finally { setBusy(false); }
   }
 
-  // ── First-time or name-change flow ────────────────────────────────────────────
+  if (venueError) return (
+    <div className="center-screen">
+      <Music size={48} color="#2A1F17" style={{ marginBottom: 16 }} />
+      <p style={{ color: '#f87171' }}>{venueError}</p>
+      <button className="btn-secondary" onClick={() => navigate('/')}>← Home</button>
+      <VersionFooter />
+    </div>
+  );
+
+  if (!venue) return (
+    <div className="center-screen">
+      <p style={{ color: '#8B6F52' }}>Loading…</p>
+      <VersionFooter />
+    </div>
+  );
+
   return (
     <div className="center-screen">
-      <div style={{ textAlign: 'center', maxWidth: 340 }}>
-        <Music size={52} color="#FF6B35" style={{ marginBottom: 12 }} />
-        <p style={{ color: '#8B6F52', margin: '0 0 4px' }}>{t.welcomeTo}</p>
-        <h1 style={{ margin: '0 0 24px', fontSize: 28, fontWeight: 900, color: '#F0E6D3' }}>{venue.name}</h1>
-
-        {/* Only show free credits banner for first-time visitors to this room */}
-        {venue.welcome_credits > 0 && !alreadyJoined && !token && (
-          <div style={{
-            background: 'rgba(255,107,53,0.08)',
-            border: '1px solid rgba(255,107,53,0.3)',
-            borderRadius: 10,
-            padding: '12px 20px',
-            marginBottom: 24, fontSize: 14, color: '#F0E6D3',
-          }}>
-            You'll receive <strong style={{ color: '#FF6B35' }}>{venue.welcome_credits} free credits</strong> to request songs!
-          </div>
-        )}
-
-        {/* Display name */}
-        <div style={{ marginBottom: 16, textAlign: 'left' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#8B6F52', marginBottom: 6 }}>
-            <User size={13} /> Your name <span style={{ fontWeight: 400 }}>(shown when you request songs)</span>
-          </label>
-          <input
-            type="text"
-            value={displayName}
-            onChange={e => setDisplayName(e.target.value)}
-            placeholder="Enter a nickname…"
-            maxLength={32}
-            className="input"
-            autoFocus={editingName}
-          />
+      <div style={{ width: '100%', maxWidth: 340 }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <Logo size={44} style={{ margin: '0 auto 14px' }} />
+          <p style={{ color: '#8B6F52', margin: '0 0 4px', fontSize: 13 }}>Joining</p>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: '#F0E6D3' }}>{venue.name}</h1>
         </div>
 
-        <button className="btn-primary" style={{ width: '100%', padding: 16, fontSize: 16, marginBottom: 12 }} onClick={() => proceed()}>
-          {t.joinVenue} <ArrowRight size={18} />
-        </button>
-
-        {editingName && (
-          <button
-            style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', fontSize: 13, marginBottom: 12 }}
-            onClick={() => setEditingName(false)}
-          >
-            ← Back
-          </button>
+        {/* ── Phase: phone ── */}
+        {phase === 'phone' && (
+          <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#8B6F52', marginBottom: 6 }}>
+                <Phone size={12} /> Phone number
+              </label>
+              <input
+                className="input"
+                type="tel"
+                placeholder="+1 555 000 0000"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                autoFocus
+                style={{ fontSize: 17, letterSpacing: 1 }}
+              />
+              <p style={{ margin: '6px 0 0', fontSize: 11, color: '#5A4535' }}>
+                Include country code (e.g. +1 for US, +91 for India)
+              </p>
+            </div>
+            {error && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>{error}</p>}
+            <button className="btn-primary" type="submit" disabled={busy} style={{ padding: 14, fontSize: 15 }}>
+              {busy ? 'Sending…' : <><Phone size={16} /> Send Code</>}
+            </button>
+            {venue.welcome_credits > 0 && (
+              <p style={{ textAlign: 'center', fontSize: 12, color: '#8B6F52', margin: 0 }}>
+                You'll get <strong style={{ color: '#FF6B35' }}>{venue.welcome_credits} free credits</strong> on your first visit
+              </p>
+            )}
+          </form>
         )}
 
-        {!token && (
-          <p style={{ fontSize: 12, color: '#8B6F52', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-            <AlertTriangle size={12} /> {t.anonymousCreditWarning}{' '}
-            <a href="/" style={{ color: '#FF6B35' }}>{t.login}</a>
-          </p>
+        {/* ── Phase: otp ── */}
+        {phase === 'otp' && (
+          <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#8B6F52', marginBottom: 6 }}>
+                <KeyRound size={12} /> Verification code
+              </label>
+              <p style={{ margin: '0 0 10px', fontSize: 13, color: '#8B6F52' }}>
+                Sent to <strong style={{ color: '#F0E6D3' }}>{phone}</strong>
+              </p>
+              <input
+                className="input"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="000000"
+                maxLength={6}
+                value={otp}
+                onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                autoFocus
+                style={{ fontSize: 28, letterSpacing: 8, textAlign: 'center', fontFamily: 'monospace' }}
+              />
+            </div>
+            {error && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>{error}</p>}
+            <button className="btn-primary" type="submit" disabled={busy} style={{ padding: 14, fontSize: 15 }}>
+              {busy ? 'Verifying…' : <><KeyRound size={16} /> Verify Code</>}
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}
+                onClick={() => { setPhase('phone'); setOtp(''); setError(''); }}>
+                <RotateCcw size={13} /> Change number
+              </button>
+              {resendTimer > 0
+                ? <span style={{ fontSize: 12, color: '#5A4535' }}>Resend in {resendTimer}s</span>
+                : <button type="button" style={{ background: 'none', border: 'none', color: '#FF6B35', cursor: 'pointer', fontSize: 13 }}
+                    onClick={handleSendOtp} disabled={busy}>Resend code</button>
+              }
+            </div>
+          </form>
+        )}
+
+        {/* ── Phase: name ── */}
+        {phase === 'name' && (
+          <form onSubmit={handleSetName} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#8B6F52', marginBottom: 6 }}>
+                <User size={12} /> Your display name
+              </label>
+              <p style={{ margin: '0 0 10px', fontSize: 13, color: '#8B6F52' }}>
+                This is how you'll appear when requesting songs.
+              </p>
+              <input
+                className="input"
+                type="text"
+                placeholder="e.g. Alex"
+                maxLength={32}
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                autoFocus
+                style={{ fontSize: 17 }}
+              />
+            </div>
+            {error && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>{error}</p>}
+            <button className="btn-primary" type="submit" disabled={busy} style={{ padding: 14, fontSize: 15 }}>
+              {busy ? 'Entering room…' : <>Enter Room <ArrowRight size={16} /></>}
+            </button>
+          </form>
         )}
       </div>
+      <VersionFooter />
     </div>
   );
 }

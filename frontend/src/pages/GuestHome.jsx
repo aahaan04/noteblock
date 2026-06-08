@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings, LogOut, ArrowRight, Coins } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
+import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { api } from '../lib/api.js';
@@ -12,6 +13,10 @@ export default function GuestHome() {
   const navigate = useNavigate();
   const [savedRooms, setSavedRooms] = useState([]);
   const [roomInput, setRoomInput] = useState('');
+
+  useEffect(() => {
+    if (!token) navigate('/', { replace: true });
+  }, [token]);
 
   useEffect(() => {
     if (token) api.users.savedRooms(token).then(setSavedRooms).catch(() => {});
@@ -29,25 +34,26 @@ export default function GuestHome() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
         <Logo size={30} />
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, flex: 1, color: '#F0E6D3' }}>Noteblock</h1>
-        {token ? (
-          <button className="btn-secondary" style={{ fontSize: 12 }} onClick={signOut}>
-            <LogOut size={14} /> {t.logout}
-          </button>
-        ) : (
-          <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => navigate('/')}>{t.login}</button>
-        )}
         <button className="btn-secondary" style={{ fontSize: 12, padding: '8px 10px' }} onClick={() => navigate('/settings')}>
           <Settings size={15} />
+        </button>
+        <button className="btn-secondary" style={{ fontSize: 12 }} onClick={signOut}>
+          <LogOut size={14} /> {t.logout}
         </button>
       </div>
 
       {profile && (
-        <p style={{ color: '#8B6F52', marginBottom: 24, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-          Welcome, <strong style={{ color: '#F0E6D3' }}>{profile.display_name}</strong>
-          <Coins size={14} color="#C89B6E" />
-          <span style={{ color: '#C89B6E', fontWeight: 700 }}>{profile.credits_balance}</span>
-          <span>{t.credits}</span>
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24, padding: '12px 16px', background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 10 }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 13, color: '#8B6F52' }}>Welcome back</p>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: '#F0E6D3' }}>{profile.display_name}</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Coins size={16} color="#C89B6E" />
+            <span style={{ color: '#C89B6E', fontWeight: 700, fontSize: 15 }}>{profile.credits_balance}</span>
+            <span style={{ color: '#8B6F52', fontSize: 13 }}>{t.credits}</span>
+          </div>
+        </div>
       )}
 
       {/* Join by code */}
@@ -76,8 +82,7 @@ export default function GuestHome() {
             {savedRooms.map(r => (
               <div key={r.id} style={{
                 display: 'flex', alignItems: 'center', gap: 12,
-                background: '#1A1008', border: '1px solid #2A1F17',
-                borderRadius: 10, padding: '12px 16px',
+                background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 10, padding: '12px 16px',
               }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 15, color: '#F0E6D3' }}>{r.venue?.name}</div>
@@ -98,6 +103,8 @@ export default function GuestHome() {
           </div>
         </div>
       )}
+
+      <VersionFooter />
     </div>
   );
 }

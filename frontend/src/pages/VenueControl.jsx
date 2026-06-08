@@ -6,6 +6,7 @@ import {
   Gift, Check, X, ChevronUp, ChevronDown, Save, AlertTriangle,
 } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
+import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { api } from '../lib/api.js';
@@ -531,7 +532,7 @@ function UsersPanel({ venueId, token }) {
 
       {!displayed.length && (
         <p style={{ color: '#8B6F52', textAlign: 'center', marginTop: 32 }}>
-          {filter === 'banned' ? 'No banned users' : 'Waiting for guests to join…'}
+          {filter === 'banned' ? 'No banned users' : 'No one in the room yet'}
         </p>
       )}
 
@@ -574,10 +575,9 @@ function UsersPanel({ venueId, token }) {
                   </span>
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999,
-                    background: u.isRegistered ? 'rgba(255,107,53,0.15)' : 'rgba(90,69,53,0.25)',
-                    color: u.isRegistered ? '#FF6B35' : '#8B6F52',
+                    background: 'rgba(255,107,53,0.15)', color: '#FF6B35',
                   }}>
-                    {u.isRegistered ? 'Signed In' : 'Guest'}
+                    {u.isRegistered ? 'Verified' : 'User'}
                   </span>
                   {u.banned && (
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, background: 'rgba(248,113,113,0.2)', color: '#f87171' }}>
@@ -697,6 +697,7 @@ function UsersPanel({ venueId, token }) {
           </div>
         </div>
       )}
+      <VersionFooter />
     </div>
   );
 }

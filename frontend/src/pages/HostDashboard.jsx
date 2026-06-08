@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings, LogOut, Plus, QrCode, ChevronUp, ChevronDown, Home } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
+import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -123,6 +124,7 @@ export default function HostDashboard() {
           />
         ))}
       </div>
+      <VersionFooter />
     </div>
   );
 }

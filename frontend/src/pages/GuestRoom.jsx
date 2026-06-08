@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Search, ListMusic, Clock, Music, Pause } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
+import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { api } from '../lib/api.js';
@@ -21,18 +22,21 @@ export default function GuestRoom() {
   const [queue, setQueue] = useState([]);
   const [banned, setBanned] = useState([]);
   const [credits, setCredits] = useState(0);
-  const [isAnon, setIsAnon] = useState(!token);
   const [selected, setSelected] = useState(null);
   const [quickPrice, setQuickPrice] = useState(3);
   const [sessionHistory, setSessionHistory] = useState([]);
   const [tab, setTab] = useState('search');
   const [toast, setToast] = useState('');
 
-  useEffect(() => { loadVenue(); }, [roomCode]);
+  // Redirect to join if not authenticated
+  useEffect(() => {
+    if (!token) navigate(`/join/${roomCode}`, { replace: true });
+  }, [token]);
+
+  useEffect(() => { if (token) loadVenue(); }, [roomCode, token]);
 
   useEffect(() => {
-    if (profile) setCredits(profile.credits_balance ?? 0);
-    else setCredits(parseInt(localStorage.getItem('nb_anon_credits') ?? '0'));
+    setCredits(profile?.credits_balance ?? 0);
   }, [profile]);
 
   async function loadVenue() {
@@ -41,7 +45,7 @@ export default function GuestRoom() {
       setVenue(v);
       loadQueue(v.id);
       loadBanned(v.id);
-    } catch { navigate('/'); }
+    } catch { navigate('/guest'); }
   }
 
   async function loadQueue(venueId) {
@@ -58,6 +62,7 @@ export default function GuestRoom() {
     setBanned(b);
   }
 
+  // Real-time queue updates
   useEffect(() => {
     if (!venue) return;
     const sub = supabase
@@ -67,18 +72,17 @@ export default function GuestRoom() {
     return () => supabase.removeChannel(sub);
   }, [venue]);
 
-  // Presence: broadcast this user's identity to the host the moment they open the room
+  // Presence: broadcast identity to host's Users tab
   useEffect(() => {
-    if (!venue) return;
-    const name = profile?.display_name ?? localStorage.getItem('nb_guest_name') ?? 'Guest';
+    if (!venue || !profile) return;
     const ch = supabase.channel(`presence-${venue.id}`);
     ch.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        await ch.track({ name, isRegistered: !!token, ts: Date.now() });
+        await ch.track({ name: profile.display_name, isRegistered: true, ts: Date.now() });
       }
     });
     return () => supabase.removeChannel(ch);
-  }, [venue?.id, !!token]);
+  }, [venue?.id, profile?.display_name]);
 
   const handleSelect = useCallback(async (song) => {
     const isBanned = banned.some(b => b.youtube_video_id === song.videoId);
@@ -95,16 +99,15 @@ export default function GuestRoom() {
     if (venue.jukebox_paused) { showToast('Jukebox is paused — try again soon'); setSelected(null); return; }
     const cost = playType === 'normal' ? 2 : quickPrice;
     if (credits < cost) { showToast(t.insufficientCredits); return; }
-    const requesterName = profile?.display_name ?? localStorage.getItem('nb_guest_name') ?? 'Guest';
+    const requesterName = profile?.display_name ?? 'Guest';
     try {
       const result = await api.queue.add(venue.id, {
         youtube_video_id: selected.videoId, song_title: selected.title,
         thumbnail_url: selected.thumbnail, play_type: playType, requester_name: requesterName,
-      }, token ?? null);
+      }, token);
       const newBalance = credits - result.credits_charged;
       setCredits(newBalance);
-      if (!token) localStorage.setItem('nb_anon_credits', String(Math.max(0, newBalance)));
-      if (token) refreshProfile();
+      refreshProfile();
       setSessionHistory(prev => [{ ...selected, playType, credits: result.credits_charged }, ...prev]);
       showToast(t.songAddedToQueue);
       setSelected(null);
@@ -141,10 +144,8 @@ export default function GuestRoom() {
       {/* Header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 50,
-        background: '#120C06',
-        borderBottom: '1px solid #2A1F17',
-        padding: '12px 16px',
-        display: 'flex', alignItems: 'center', gap: 12,
+        background: '#120C06', borderBottom: '1px solid #2A1F17',
+        padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3', display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -156,7 +157,7 @@ export default function GuestRoom() {
             </div>
           )}
         </div>
-        <CreditBalance balance={credits} anonymous={isAnon} />
+        <CreditBalance balance={credits} />
       </div>
 
       {/* Paused banner */}
@@ -166,7 +167,6 @@ export default function GuestRoom() {
         </div>
       )}
 
-      {/* Now playing */}
       <div style={{ padding: '12px 16px' }}>
         <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
       </div>
@@ -185,7 +185,6 @@ export default function GuestRoom() {
         ))}
       </div>
 
-      {/* Tab content */}
       <div style={{ padding: '16px' }}>
         {tab === 'search' && <SongSearch bannedIds={bannedIds} onSelect={handleSelect} vibeDescription={venue.vibe_description ?? ''} />}
         {tab === 'queue' && <QueueDisplay items={queue} isHost={false} />}
@@ -210,78 +209,37 @@ export default function GuestRoom() {
 
       {/* Song confirmation modal */}
       {selected && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(14,10,7,0.85)',
-          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-          zIndex: 200, padding: '0 0 16px',
-        }}>
-          <div style={{
-            background: '#120C06', border: '1px solid #2A1F17',
-            borderRadius: '14px 14px 10px 10px', padding: 24,
-            width: '100%', maxWidth: 520,
-          }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,10,7,0.85)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200, padding: '0 0 16px' }}>
+          <div style={{ background: '#120C06', border: '1px solid #2A1F17', borderRadius: '14px 14px 10px 10px', padding: 24, width: '100%', maxWidth: 520 }}>
             <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
               {selected.thumbnail && <img src={selected.thumbnail} alt="" style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 8 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3' }}>
-                  {selected.title}
-                </div>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3' }}>{selected.title}</div>
                 <div style={{ fontSize: 12, color: '#8B6F52' }}>{selected.channel}</div>
               </div>
             </div>
-
             <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-              {/* Normal Play */}
-              <button
-                style={{
-                  flex: 1, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer',
-                  background: credits >= 2 ? '#3D2B1A' : '#1A1008',
-                  color: credits >= 2 ? '#F0E6D3' : '#5A4535',
-                  fontWeight: 700, fontSize: 14, fontFamily: 'inherit',
-                  opacity: credits < 2 ? 0.5 : 1,
-                }}
-                onClick={() => handleConfirm('normal')}
-                disabled={credits < 2}
-              >
-                {t.normalPlay}<br />
-                <span style={{ fontSize: 12, fontWeight: 400, color: '#8B6F52' }}>2 {t.credits}</span>
+              <button style={{ flex: 1, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= 2 ? '#3D2B1A' : '#1A1008', color: credits >= 2 ? '#F0E6D3' : '#5A4535', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < 2 ? 0.5 : 1 }}
+                onClick={() => handleConfirm('normal')} disabled={credits < 2}>
+                {t.normalPlay}<br /><span style={{ fontSize: 12, fontWeight: 400, color: '#8B6F52' }}>2 {t.credits}</span>
               </button>
-              {/* Quick Play */}
-              <button
-                style={{
-                  flex: 1, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer',
-                  background: credits >= quickPrice ? '#FF6B35' : '#1A1008',
-                  color: '#F0E6D3',
-                  fontWeight: 700, fontSize: 14, fontFamily: 'inherit',
-                  opacity: credits < quickPrice ? 0.5 : 1,
-                  boxShadow: credits >= quickPrice ? '0 0 14px rgba(255,107,53,0.4)' : 'none',
-                }}
-                onClick={() => handleConfirm('quick')}
-                disabled={credits < quickPrice}
-              >
-                Quick Play<br />
-                <span style={{ fontSize: 12, fontWeight: 400 }}>{quickPrice} {t.credits}</span>
+              <button style={{ flex: 1, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= quickPrice ? '#FF6B35' : '#1A1008', color: '#F0E6D3', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < quickPrice ? 0.5 : 1, boxShadow: credits >= quickPrice ? '0 0 14px rgba(255,107,53,0.4)' : 'none' }}
+                onClick={() => handleConfirm('quick')} disabled={credits < quickPrice}>
+                Quick Play<br /><span style={{ fontSize: 12, fontWeight: 400 }}>{quickPrice} {t.credits}</span>
               </button>
             </div>
-
-            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setSelected(null)}>
-              {t.cancel}
-            </button>
+            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setSelected(null)}>{t.cancel}</button>
           </div>
         </div>
       )}
 
-      {/* Toast */}
       {toast && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: '#1A1008', border: '1px solid #FF6B35', borderRadius: 999,
-          padding: '10px 20px', fontSize: 14, fontWeight: 600, zIndex: 300,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', color: '#F0E6D3', whiteSpace: 'nowrap',
-        }}>
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#1A1008', border: '1px solid #FF6B35', borderRadius: 999, padding: '10px 20px', fontSize: 14, fontWeight: 600, zIndex: 300, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', color: '#F0E6D3', whiteSpace: 'nowrap' }}>
           {toast}
         </div>
       )}
+
+      <VersionFooter />
     </div>
   );
 }
