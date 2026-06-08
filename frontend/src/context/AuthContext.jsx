@@ -95,15 +95,12 @@ export function AuthProvider({ children }) {
     return data;
   }
 
-  async function sendOtp(phone) {
-    const { error } = await supabase.auth.signInWithOtp({ phone });
+  async function sendMagicLink(email, redirectTo) {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo },
+    });
     if (error) throw error;
-  }
-
-  async function verifyPhoneOtp(phone, token) {
-    const { data, error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
-    if (error) throw error;
-    return data;
   }
 
   async function signOut() {
@@ -127,7 +124,7 @@ export function AuthProvider({ children }) {
       profile,
       token: session?.access_token ?? null,
       loading,
-      signUp, signIn, signOut, refreshProfile, sendOtp, verifyPhoneOtp,
+      signUp, signIn, signOut, refreshProfile, sendMagicLink,
     }}>
       {children}
     </AuthContext.Provider>

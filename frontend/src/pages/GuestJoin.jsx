@@ -1,83 +1,72 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Phone, KeyRound, User, ArrowRight, Music, RotateCcw } from 'lucide-react';
+import { Mail, User, ArrowRight, Music, CheckCircle } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
 
-// phase: 'phone' | 'otp' | 'name' | 'joining'
 export default function GuestJoin() {
   const { roomCode } = useParams();
-  const { profile, token, sendOtp, verifyPhoneOtp, refreshProfile } = useAuth();
+  const { profile, token, loading, sendMagicLink, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const [venue, setVenue] = useState(null);
   const [venueError, setVenueError] = useState('');
-  const [phase, setPhase] = useState('phone');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
+
+  // 'email' → user enters email
+  // 'sent'  → magic link sent, waiting for click
+  // 'name'  → new user, pick display name
+  const [phase, setPhase] = useState('email');
+  const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [resendTimer, setResendTimer] = useState(0);
 
-  // Load venue info
+  // Load venue
   useEffect(() => {
     api.venues.getByCode(roomCode)
       .then(v => { if (v.status === 'closed') setVenueError('This room is currently closed.'); else setVenue(v); })
       .catch(() => setVenueError('Room not found.'));
   }, [roomCode]);
 
-  // Countdown timer for resend
+  // After magic link click: session is established → decide what to do
   useEffect(() => {
-    if (resendTimer <= 0) return;
-    const id = setTimeout(() => setResendTimer(t => t - 1), 1000);
-    return () => clearTimeout(id);
-  }, [resendTimer]);
+    if (loading || !token || !venue) return;
+    if (phase === 'name') return; // already handling name entry
 
-  // If already logged in, skip straight to joining
-  useEffect(() => {
-    if (!token || !venue) return;
-    joinRoom();
-  }, [token, venue]);
+    // If display_name was auto-generated from email prefix, ask for a real name
+    const emailPrefix = profile?.email?.split('@')[0] ?? '';
+    const needsName = !profile?.display_name || profile.display_name === emailPrefix;
+
+    if (needsName) {
+      setDisplayName('');
+      setPhase('name');
+    } else {
+      joinRoom();
+    }
+  }, [loading, token, venue, profile?.id]); // eslint-disable-line
 
   async function joinRoom() {
-    if (!venue) return;
-    // Grant welcome credits on first visit (RPC is idempotent)
+    if (!venue || !token) return;
     await api.users.welcome(venue.id, token).catch(() => {});
     await refreshProfile();
     navigate(`/room/${roomCode}`);
   }
 
-  async function handleSendOtp(e) {
+  async function handleSendLink(e) {
     e?.preventDefault();
     setError('');
-    const cleaned = phone.trim();
-    if (!cleaned) { setError('Enter your phone number.'); return; }
+    const addr = email.trim().toLowerCase();
+    if (!addr || !addr.includes('@')) { setError('Enter a valid email address.'); return; }
     setBusy(true);
     try {
-      await sendOtp(cleaned);
-      setPhase('otp');
-      setResendTimer(30);
+      const redirectTo = `${window.location.origin}/join/${roomCode}`;
+      await sendMagicLink(addr, redirectTo);
+      setPhase('sent');
     } catch (err) {
-      setError(err.message ?? 'Could not send code. Check the number and try again.');
-    } finally { setBusy(false); }
-  }
-
-  async function handleVerifyOtp(e) {
-    e?.preventDefault();
-    setError('');
-    if (otp.length < 6) { setError('Enter the 6-digit code.'); return; }
-    setBusy(true);
-    try {
-      await verifyPhoneOtp(phone.trim(), otp.trim());
-      // AuthContext will load/create profile. Wait briefly for it.
-      // If display_name is just the phone number stub, ask for a name.
-      setPhase('name');
-    } catch (err) {
-      setError(err.message ?? 'Invalid code. Try again.');
+      setError(err.message ?? 'Could not send link. Try again.');
     } finally { setBusy(false); }
   }
 
@@ -88,7 +77,6 @@ export default function GuestJoin() {
     if (!name) { setError('Enter a display name.'); return; }
     setBusy(true);
     try {
-      // Get token from current session (available after OTP verification)
       const { data: { session } } = await supabase.auth.getSession();
       const tok = session?.access_token ?? token;
       await api.users.updateProfile({ display_name: name }, tok);
@@ -99,6 +87,7 @@ export default function GuestJoin() {
     } finally { setBusy(false); }
   }
 
+  // ── Error / loading states ────────────────────────────────────────────────────
   if (venueError) return (
     <div className="center-screen">
       <Music size={48} color="#2A1F17" style={{ marginBottom: 16 }} />
@@ -120,82 +109,64 @@ export default function GuestJoin() {
       <div style={{ width: '100%', maxWidth: 340 }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <Logo size={44} style={{ margin: '0 auto 14px' }} />
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+            <Logo size={44} />
+          </div>
           <p style={{ color: '#8B6F52', margin: '0 0 4px', fontSize: 13 }}>Joining</p>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: '#F0E6D3' }}>{venue.name}</h1>
         </div>
 
-        {/* ── Phase: phone ── */}
-        {phase === 'phone' && (
-          <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* ── Phase: email ── */}
+        {phase === 'email' && (
+          <form onSubmit={handleSendLink} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#8B6F52', marginBottom: 6 }}>
-                <Phone size={12} /> Phone number
+                <Mail size={12} /> Your email
               </label>
               <input
                 className="input"
-                type="tel"
-                placeholder="+1 555 000 0000"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
                 autoFocus
-                style={{ fontSize: 17, letterSpacing: 1 }}
+                style={{ fontSize: 16 }}
               />
               <p style={{ margin: '6px 0 0', fontSize: 11, color: '#5A4535' }}>
-                Include country code (e.g. +1 for US, +91 for India)
+                We'll send a magic link — no password needed
               </p>
             </div>
             {error && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>{error}</p>}
             <button className="btn-primary" type="submit" disabled={busy} style={{ padding: 14, fontSize: 15 }}>
-              {busy ? 'Sending…' : <><Phone size={16} /> Send Code</>}
+              {busy ? 'Sending…' : <><Mail size={16} /> Send Magic Link</>}
             </button>
             {venue.welcome_credits > 0 && (
               <p style={{ textAlign: 'center', fontSize: 12, color: '#8B6F52', margin: 0 }}>
-                You'll get <strong style={{ color: '#FF6B35' }}>{venue.welcome_credits} free credits</strong> on your first visit
+                Get <strong style={{ color: '#FF6B35' }}>{venue.welcome_credits} free credits</strong> on your first visit
               </p>
             )}
           </form>
         )}
 
-        {/* ── Phase: otp ── */}
-        {phase === 'otp' && (
-          <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#8B6F52', marginBottom: 6 }}>
-                <KeyRound size={12} /> Verification code
-              </label>
-              <p style={{ margin: '0 0 10px', fontSize: 13, color: '#8B6F52' }}>
-                Sent to <strong style={{ color: '#F0E6D3' }}>{phone}</strong>
-              </p>
-              <input
-                className="input"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="000000"
-                maxLength={6}
-                value={otp}
-                onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                autoFocus
-                style={{ fontSize: 28, letterSpacing: 8, textAlign: 'center', fontFamily: 'monospace' }}
-              />
-            </div>
-            {error && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>{error}</p>}
-            <button className="btn-primary" type="submit" disabled={busy} style={{ padding: 14, fontSize: 15 }}>
-              {busy ? 'Verifying…' : <><KeyRound size={16} /> Verify Code</>}
+        {/* ── Phase: sent ── */}
+        {phase === 'sent' && (
+          <div style={{ textAlign: 'center' }}>
+            <CheckCircle size={52} color="#34d399" style={{ marginBottom: 16 }} />
+            <h2 style={{ margin: '0 0 8px', color: '#F0E6D3', fontSize: 20 }}>Check your email</h2>
+            <p style={{ color: '#8B6F52', fontSize: 14, margin: '0 0 24px' }}>
+              We sent a magic link to<br />
+              <strong style={{ color: '#F0E6D3' }}>{email}</strong>
+            </p>
+            <p style={{ color: '#5A4535', fontSize: 12, margin: '0 0 20px' }}>
+              Click the link in the email to join the room. You can close this tab.
+            </p>
+            <button
+              style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', fontSize: 13 }}
+              onClick={() => { setPhase('email'); setError(''); }}
+            >
+              ← Use a different email
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <button type="button" style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}
-                onClick={() => { setPhase('phone'); setOtp(''); setError(''); }}>
-                <RotateCcw size={13} /> Change number
-              </button>
-              {resendTimer > 0
-                ? <span style={{ fontSize: 12, color: '#5A4535' }}>Resend in {resendTimer}s</span>
-                : <button type="button" style={{ background: 'none', border: 'none', color: '#FF6B35', cursor: 'pointer', fontSize: 13 }}
-                    onClick={handleSendOtp} disabled={busy}>Resend code</button>
-              }
-            </div>
-          </form>
+          </div>
         )}
 
         {/* ── Phase: name ── */}
