@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Mail, User, ArrowRight, Music, CheckCircle } from 'lucide-react';
+import { Mail, User, ArrowRight, Music, CheckCircle, Loader } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -15,30 +15,45 @@ export default function GuestJoin() {
   const [venue, setVenue] = useState(null);
   const [venueError, setVenueError] = useState('');
 
-  // 'email' → user enters email
-  // 'sent'  → magic link sent, waiting for click
-  // 'name'  → new user, pick display name
-  const [phase, setPhase] = useState('email');
+  // 'detecting' → waiting for auth/venue to resolve (shown on magic-link redirect)
+  // 'email'     → not logged in, enter email
+  // 'sent'      → magic link sent, waiting
+  // 'name'      → new user, pick display name
+  const [phase, setPhase] = useState('detecting');
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const joinedRef = useRef(false); // prevent double-join
 
   // Load venue
   useEffect(() => {
     api.venues.getByCode(roomCode)
-      .then(v => { if (v.status === 'closed') setVenueError('This room is currently closed.'); else setVenue(v); })
+      .then(v => {
+        if (v.status === 'closed') setVenueError('This room is currently closed.');
+        else setVenue(v);
+      })
       .catch(() => setVenueError('Room not found.'));
   }, [roomCode]);
 
-  // After magic link click: session is established → decide what to do
+  // Once auth resolves AND venue is loaded, decide what to do
   useEffect(() => {
-    if (loading || !token || !venue) return;
-    if (phase === 'name') return; // already handling name entry
+    if (loading || !venue) return; // still waiting
 
-    // If display_name was auto-generated from email prefix, ask for a real name
+    if (!token) {
+      // Not logged in — show email form
+      setPhase('email');
+      return;
+    }
+
+    // Already logged in (returning user OR just clicked magic link)
+    if (joinedRef.current) return;
+
     const emailPrefix = profile?.email?.split('@')[0] ?? '';
-    const needsName = !profile?.display_name || profile.display_name === emailPrefix;
+    const needsName =
+      !profile?.display_name ||
+      profile.display_name === emailPrefix ||
+      profile.display_name === 'User';
 
     if (needsName) {
       setDisplayName('');
@@ -49,10 +64,11 @@ export default function GuestJoin() {
   }, [loading, token, venue, profile?.id]); // eslint-disable-line
 
   async function joinRoom() {
-    if (!venue || !token) return;
+    if (joinedRef.current) return;
+    joinedRef.current = true;
     await api.users.welcome(venue.id, token).catch(() => {});
     await refreshProfile();
-    navigate(`/room/${roomCode}`);
+    navigate(`/room/${roomCode}`, { replace: true });
   }
 
   async function handleSendLink(e) {
@@ -83,11 +99,12 @@ export default function GuestJoin() {
       await refreshProfile();
       await joinRoom();
     } catch (err) {
-      setError(err.message ?? 'Could not save name.');
-    } finally { setBusy(false); }
+      setError(err.message ?? 'Could not save name. Try again.');
+      setBusy(false);
+    }
   }
 
-  // ── Error / loading states ────────────────────────────────────────────────────
+  // ── Error state ───────────────────────────────────────────────────────────────
   if (venueError) return (
     <div className="center-screen">
       <Music size={48} color="#2A1F17" style={{ marginBottom: 16 }} />
@@ -97,9 +114,14 @@ export default function GuestJoin() {
     </div>
   );
 
-  if (!venue) return (
+  // ── Detecting / loading ───────────────────────────────────────────────────────
+  if (phase === 'detecting' || (!venue && !venueError)) return (
     <div className="center-screen">
-      <p style={{ color: '#8B6F52' }}>Loading…</p>
+      <Loader size={32} color="#FF6B35" style={{ marginBottom: 16, animation: 'spin 1s linear infinite' }} />
+      <p style={{ color: '#8B6F52', fontSize: 14 }}>
+        {!venue ? 'Loading room…' : 'Signing you in…'}
+      </p>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       <VersionFooter />
     </div>
   );
@@ -158,7 +180,7 @@ export default function GuestJoin() {
               <strong style={{ color: '#F0E6D3' }}>{email}</strong>
             </p>
             <p style={{ color: '#5A4535', fontSize: 12, margin: '0 0 20px' }}>
-              Click the link in the email to join the room. You can close this tab.
+              Click the link to be taken straight into the room.
             </p>
             <button
               style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', fontSize: 13 }}
