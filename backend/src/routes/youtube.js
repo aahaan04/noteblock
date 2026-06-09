@@ -5,6 +5,8 @@ const router = Router();
 const YT_BASE = 'https://www.googleapis.com/youtube/v3';
 const API_KEY = () => process.env.YOUTUBE_API_KEY;
 
+const MAX_DURATION_SECONDS = 600; // 10 minutes
+
 // GET /api/youtube/search?q=...
 router.get('/search', async (req, res) => {
   const { q } = req.query;
@@ -13,8 +15,9 @@ router.get('/search', async (req, res) => {
   const query = encodeURIComponent(q);
 
   try {
+    // Fetch more than needed so we still have good results after filtering long videos
     const searchRes = await fetch(
-      `${YT_BASE}/search?part=snippet&q=${query}&type=video&videoCategoryId=10&maxResults=10&key=${API_KEY()}`
+      `${YT_BASE}/search?part=snippet&q=${query}&type=video&videoCategoryId=10&maxResults=20&key=${API_KEY()}`
     );
     const searchData = await searchRes.json();
 
@@ -29,16 +32,25 @@ router.get('/search', async (req, res) => {
 
     const durationMap = {};
     for (const item of detailData.items ?? []) {
-      durationMap[item.id] = parseDuration(item.contentDetails.duration);
+      const secs = parseDurationSeconds(item.contentDetails.duration);
+      durationMap[item.id] = { secs, display: formatDuration(secs) };
     }
 
-    const results = searchData.items.map(item => ({
-      videoId: item.id.videoId,
-      title: item.snippet.title,
-      channel: item.snippet.channelTitle,
-      thumbnail: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
-      duration: durationMap[item.id.videoId] ?? null,
-    }));
+    const results = searchData.items
+      .map(item => {
+        const dur = durationMap[item.id.videoId];
+        return {
+          videoId: item.id.videoId,
+          title: item.snippet.title,
+          channel: item.snippet.channelTitle,
+          thumbnail: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
+          duration: dur?.display ?? null,
+          durationSeconds: dur?.secs ?? null,
+        };
+      })
+      // Filter out videos longer than 10 minutes (and live streams which have null/0 duration)
+      .filter(r => r.durationSeconds !== null && r.durationSeconds > 0 && r.durationSeconds <= MAX_DURATION_SECONDS)
+      .slice(0, 10);
 
     res.json(results);
   } catch (err) {
@@ -113,16 +125,24 @@ router.get('/suggestions', async (req, res) => {
     const detailData = await detailRes.json();
     const durationMap = {};
     for (const item of detailData.items ?? []) {
-      durationMap[item.id] = parseDuration(item.contentDetails.duration);
+      const secs = parseDurationSeconds(item.contentDetails.duration);
+      durationMap[item.id] = { secs, display: formatDuration(secs) };
     }
 
-    res.json(searchData.items.map(item => ({
-      videoId: item.id.videoId,
-      title: item.snippet.title,
-      channel: item.snippet.channelTitle,
-      thumbnail: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
-      duration: durationMap[item.id.videoId] ?? null,
-    })));
+    res.json(searchData.items
+      .map(item => {
+        const dur = durationMap[item.id.videoId];
+        return {
+          videoId: item.id.videoId,
+          title: item.snippet.title,
+          channel: item.snippet.channelTitle,
+          thumbnail: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
+          duration: dur?.display ?? null,
+          durationSeconds: dur?.secs ?? null,
+        };
+      })
+      .filter(r => r.durationSeconds !== null && r.durationSeconds > 0 && r.durationSeconds <= MAX_DURATION_SECONDS)
+    );
   } catch (err) {
     console.error('Suggestions error:', err);
     res.json([]);
@@ -159,16 +179,17 @@ async function fetchPlaylistVideos(playlistId, maxResults = 50) {
   return videos.slice(0, maxResults);
 }
 
-function parseDuration(iso) {
+function parseDurationSeconds(iso) {
   if (!iso) return null;
   const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!m) return null;
-  const h = parseInt(m[1] ?? 0);
-  const min = parseInt(m[2] ?? 0);
-  const s = parseInt(m[3] ?? 0);
-  const total = h * 3600 + min * 60 + s;
-  const mm = String(Math.floor(total / 60)).padStart(1, '0');
-  const ss = String(total % 60).padStart(2, '0');
+  return parseInt(m[1] ?? 0) * 3600 + parseInt(m[2] ?? 0) * 60 + parseInt(m[3] ?? 0);
+}
+
+function formatDuration(totalSeconds) {
+  if (totalSeconds == null) return null;
+  const mm = String(Math.floor(totalSeconds / 60)).padStart(1, '0');
+  const ss = String(totalSeconds % 60).padStart(2, '0');
   return `${mm}:${ss}`;
 }
 
