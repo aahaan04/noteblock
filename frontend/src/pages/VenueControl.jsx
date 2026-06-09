@@ -3,8 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Music, Play, Pause, SkipForward, ListMusic, Radio,
   Ban, Users, BarChart2, QrCode, RefreshCw, MoreHorizontal,
-  Gift, Check, X, ChevronUp, ChevronDown, Save, AlertTriangle,
+  Gift, Check, X, ChevronUp, ChevronDown, Save, AlertTriangle, Settings2,
 } from 'lucide-react';
+
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return mobile;
+}
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -23,6 +33,7 @@ export default function VenueControl() {
   const { t } = useLang();
   const navigate = useNavigate();
   const playerRef = useRef(null);
+  const isMobile = useIsMobile();
 
   const [venue, setVenue] = useState(null);
   const [queue, setQueue] = useState([]);
@@ -30,7 +41,7 @@ export default function VenueControl() {
   const [vibeVideos, setVibeVideos] = useState([]);
   const [nowPlaying, setNowPlaying] = useState(null);
   const [vibeActive, setVibeActive] = useState(false);
-  const [tab, setTab] = useState('player');
+  const [tab, setTab] = useState(() => window.innerWidth < 768 ? 'player' : 'queue');
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [skipping, setSkipping] = useState(false);
@@ -111,7 +122,173 @@ export default function VenueControl() {
   const pendingQueue = queue.filter(i => i.status === 'pending');
   const isActive = venue.status === 'active';
 
-  const tabs = [
+  // Player panel — shared between mobile and desktop
+  const playerPanel = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <CrossfadePlayer
+        ref={playerRef} queue={queue} vibeVideos={vibeVideos}
+        vibeEnabled={venue.vibe_mode_enabled} crossfadeSecs={venue.crossfade_duration_seconds}
+        jukeboxPaused={venue.jukebox_paused ?? false}
+        onMarkPlaying={handleMarkPlaying} onMarkPlayed={handleMarkPlayed}
+        onNowPlaying={setNowPlaying} onVibeActive={setVibeActive}
+      />
+      <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button
+          className="btn-secondary"
+          style={{ flex: 1, fontSize: 13, borderColor: venue.jukebox_paused ? '#FF6B35' : '#2A1F17', color: venue.jukebox_paused ? '#FF6B35' : '#F0E6D3' }}
+          onClick={() => handleVenueUpdate({ jukebox_paused: !venue.jukebox_paused })}
+        >
+          {venue.jukebox_paused ? <><Play size={15} /> Resume</> : <><Pause size={15} /> Pause</>}
+        </button>
+        {!nowPlaying && !venue.jukebox_paused && (
+          <button className="btn-primary" style={{ flex: 1, fontSize: 13, background: '#22c55e' }}
+            onClick={() => playerRef.current?.start()}>
+            <Play size={15} /> Start
+          </button>
+        )}
+        {nowPlaying && !venue.jukebox_paused && (
+          <button className="btn-primary" style={{ flex: 1, fontSize: 13, opacity: skipping ? 0.5 : 1 }}
+            onClick={handleSkip} disabled={skipping}>
+            <SkipForward size={15} /> {skipping ? '…' : t.skip}
+          </button>
+        )}
+      </div>
+      {venue.jukebox_paused && (
+        <div style={{ background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.3)', borderRadius: 10, padding: '10px 16px', fontSize: 13, color: '#FF6B35', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Pause size={14} /> Guests cannot request songs while paused
+        </div>
+      )}
+    </div>
+  );
+
+  // Tab content
+  const tabContent = (
+    <>
+      {tab === 'queue'  && <QueueDisplay items={queue} isHost onRemove={handleRemove} onSkip={handleSkip} nowPlaying={nowPlaying} />}
+      {tab === 'vibe'   && <VibeSettings venue={venue} onUpdate={handleVenueUpdate} />}
+      {tab === 'ban'    && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />}
+      {tab === 'users'  && <UsersPanel venueId={id} token={token} />}
+      {tab === 'stats'  && <StatsPanel stats={stats} />}
+      {tab === 'qr'     && <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}><VenueQRCode roomCode={venue.room_code} size={220} /></div>}
+    </>
+  );
+
+  // ── Top bar ───────────────────────────────────────────────────────────────────
+  const topBar = (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: isMobile ? '10px 12px' : '12px 20px',
+      background: '#1A1008', borderBottom: '1px solid #2A1F17', flexShrink: 0,
+    }}>
+      <button onClick={() => navigate('/host/dashboard')} style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}>
+        <ArrowLeft size={20} />
+      </button>
+      {!isMobile && <Logo size={26} />}
+      <h1 style={{ margin: 0, fontSize: isMobile ? 15 : 18, fontWeight: 800, flex: 1, color: '#F0E6D3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {venue.name}
+      </h1>
+      <span style={{
+        fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, flexShrink: 0,
+        background: isActive ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
+        color: isActive ? '#34d399' : '#f87171',
+      }}>
+        {isActive ? t.active : t.closed}
+      </span>
+      {vibeActive && !isMobile && <span style={{ fontSize: 12, color: '#FF6B35', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}><Music size={13} /> Vibe</span>}
+      <button className="btn-secondary" style={{ fontSize: isMobile ? 11 : 12, padding: isMobile ? '6px 10px' : undefined, flexShrink: 0 }}
+        onClick={() => handleVenueUpdate({ status: isActive ? 'closed' : 'active' })}>
+        {isActive ? (isMobile ? 'Close' : t.closeRoom) : (isMobile ? 'Open' : t.openRoomAction)}
+      </button>
+    </div>
+  );
+
+  // ── MOBILE layout ─────────────────────────────────────────────────────────────
+  if (isMobile) {
+    const mobileTabs = [
+      { key: 'player', icon: <Music size={20} />,     label: 'Player' },
+      { key: 'queue',  icon: <ListMusic size={20} />, label: `Queue${pendingQueue.length ? ` (${pendingQueue.length})` : ''}` },
+      { key: 'users',  icon: <Users size={20} />,     label: 'Users' },
+      { key: 'manage', icon: <Settings2 size={20} />, label: 'Manage' },
+      { key: 'qr',     icon: <QrCode size={20} />,    label: 'QR' },
+    ];
+    // 'manage' opens a sub-tab row with vibe/ban/stats
+    const manageTabs = [
+      { key: 'vibe',  label: t.vibe },
+      { key: 'ban',   label: 'Ban Songs' },
+      { key: 'stats', label: t.stats },
+    ];
+    const activeMainTab = ['vibe', 'ban', 'stats'].includes(tab) ? 'manage' : tab === 'player' ? 'player' : tab;
+
+    return (
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0E0A07' }}>
+        {topBar}
+
+        {/* Scrollable content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px 0' }}>
+          {activeMainTab === 'player' && playerPanel}
+
+          {activeMainTab === 'queue' && tabContent}
+
+          {activeMainTab === 'users' && tabContent}
+
+          {activeMainTab === 'manage' && (
+            <>
+              {/* Sub-tab row */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+                {manageTabs.map(mt => (
+                  <button key={mt.key} onClick={() => { setTab(mt.key); if (mt.key === 'stats') loadStats(); }} style={{
+                    flex: 1, padding: '8px 4px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                    background: tab === mt.key ? '#FF6B35' : '#1A1008',
+                    color: tab === mt.key ? '#F0E6D3' : '#8B6F52',
+                    fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                  }}>
+                    {mt.label}
+                  </button>
+                ))}
+              </div>
+              {tabContent}
+            </>
+          )}
+
+          {activeMainTab === 'qr' && tabContent}
+        </div>
+
+        {/* Bottom nav */}
+        <div style={{
+          display: 'flex', borderTop: '1px solid #2A1F17',
+          background: '#120C06', flexShrink: 0,
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}>
+          {mobileTabs.map(({ key, icon, label }) => {
+            const active = activeMainTab === key;
+            return (
+              <button key={key}
+                onClick={() => {
+                  if (key === 'player') setTab('player');
+                  else if (key === 'queue') setTab('queue');
+                  else if (key === 'users') setTab('users');
+                  else if (key === 'manage') { if (!['vibe','ban','stats'].includes(tab)) setTab('vibe'); }
+                  else if (key === 'qr') setTab('qr');
+                }}
+                style={{
+                  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 3, padding: '10px 4px', background: 'none', border: 'none', cursor: 'pointer',
+                  color: active ? '#FF6B35' : '#5A4535',
+                }}
+              >
+                {icon}
+                <span style={{ fontSize: 9, fontWeight: 600, fontFamily: 'inherit' }}>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── DESKTOP layout ────────────────────────────────────────────────────────────
+  const desktopTabs = [
     { key: 'queue',  icon: <ListMusic size={14} />, label: `${t.queue} (${pendingQueue.length})` },
     { key: 'vibe',   icon: <Radio size={14} />,    label: t.vibe },
     { key: 'ban',    icon: <Ban size={14} />,       label: t.bannedSongs },
@@ -122,79 +299,16 @@ export default function VenueControl() {
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0E0A07' }}>
-      {/* Top bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '12px 20px', background: '#1A1008',
-        borderBottom: '1px solid #2A1F17', flexShrink: 0,
-      }}>
-        <button onClick={() => navigate('/host/dashboard')} style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-          <ArrowLeft size={20} />
-        </button>
-        <Logo size={26} />
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, flex: 1, color: '#F0E6D3' }}>{venue.name}</h1>
-        <span style={{
-          fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
-          background: isActive ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
-          color: isActive ? '#34d399' : '#f87171',
-        }}>
-          {isActive ? t.active : t.closed}
-        </span>
-        {vibeActive && <span style={{ fontSize: 12, color: '#FF6B35', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}><Music size={13} /> Vibe</span>}
-        <button className="btn-secondary" style={{ fontSize: 12 }}
-          onClick={() => handleVenueUpdate({ status: isActive ? 'closed' : 'active' })}>
-          {isActive ? t.closeRoom : t.openRoomAction}
-        </button>
-      </div>
-
-      {/* Main layout */}
+      {topBar}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Left — player */}
         <div style={{ flex: '0 0 480px', padding: 20, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', borderRight: '1px solid #2A1F17' }}>
-          <CrossfadePlayer
-            ref={playerRef} queue={queue} vibeVideos={vibeVideos}
-            vibeEnabled={venue.vibe_mode_enabled} crossfadeSecs={venue.crossfade_duration_seconds}
-            jukeboxPaused={venue.jukebox_paused ?? false}
-            onMarkPlaying={handleMarkPlaying} onMarkPlayed={handleMarkPlayed}
-            onNowPlaying={setNowPlaying} onVibeActive={setVibeActive}
-          />
-
-          <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
-
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              className="btn-secondary"
-              style={{ flex: 1, fontSize: 13, borderColor: venue.jukebox_paused ? '#FF6B35' : '#2A1F17', color: venue.jukebox_paused ? '#FF6B35' : '#F0E6D3' }}
-              onClick={() => handleVenueUpdate({ jukebox_paused: !venue.jukebox_paused })}
-            >
-              {venue.jukebox_paused ? <><Play size={15} /> Resume Jukebox</> : <><Pause size={15} /> Pause Jukebox</>}
-            </button>
-
-            {!nowPlaying && !venue.jukebox_paused && (
-              <button className="btn-primary" style={{ flex: 1, fontSize: 13, background: '#22c55e' }}
-                onClick={() => playerRef.current?.start()}>
-                <Play size={15} /> Start Player
-              </button>
-            )}
-            {nowPlaying && !venue.jukebox_paused && (
-              <button className="btn-primary" style={{ flex: 1, fontSize: 13, opacity: skipping ? 0.5 : 1 }}
-                onClick={handleSkip} disabled={skipping}>
-                <SkipForward size={15} /> {skipping ? 'Skipping…' : t.skip}
-              </button>
-            )}
-          </div>
-
-          {venue.jukebox_paused && (
-            <div style={{ background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.3)', borderRadius: 10, padding: '10px 16px', fontSize: 13, color: '#FF6B35', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <Pause size={14} /> Jukebox is paused — guests cannot request songs
-            </div>
-          )}
+          {playerPanel}
         </div>
-
         {/* Right — tabs */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ display: 'flex', gap: 4, padding: '12px 16px', borderBottom: '1px solid #2A1F17', overflowX: 'auto', flexShrink: 0 }}>
-            {tabs.map(({ key, icon, label }) => (
+            {desktopTabs.map(({ key, icon, label }) => (
               <button key={key}
                 onClick={() => { setTab(key); if (key === 'stats') loadStats(); }}
                 style={{
@@ -208,14 +322,8 @@ export default function VenueControl() {
               </button>
             ))}
           </div>
-
           <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-            {tab === 'queue' && <QueueDisplay items={queue} isHost onRemove={handleRemove} onSkip={handleSkip} nowPlaying={nowPlaying} />}
-            {tab === 'vibe' && <VibeSettings venue={venue} onUpdate={handleVenueUpdate} />}
-            {tab === 'ban' && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />}
-            {tab === 'users' && <UsersPanel venueId={id} token={token} />}
-            {tab === 'stats' && <StatsPanel stats={stats} />}
-            {tab === 'qr' && <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}><VenueQRCode roomCode={venue.room_code} size={220} /></div>}
+            {tabContent}
           </div>
         </div>
       </div>
