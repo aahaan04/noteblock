@@ -62,15 +62,28 @@ export default function GuestRoom() {
     setBanned(b);
   }
 
-  // Real-time queue updates
+  // Real-time queue updates — NO filter (filtered subscriptions need special Supabase
+  // publication config; check venue_id manually in the callback instead)
   useEffect(() => {
     if (!venue) return;
-    const sub = supabase
+    const qSub = supabase
       .channel(`guest-queue-${venue.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_items', filter: `venue_id=eq.${venue.id}` }, () => loadQueue(venue.id))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_items' },
+        (payload) => {
+          const vid = payload.new?.venue_id ?? payload.old?.venue_id;
+          if (vid === venue.id) loadQueue(venue.id);
+        })
       .subscribe();
-    return () => supabase.removeChannel(sub);
-  }, [venue]);
+
+    // Also subscribe to venue changes so jukebox_paused updates live
+    const vSub = supabase
+      .channel(`guest-venue-${venue.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues' },
+        (payload) => { if (payload.new?.id === venue.id) setVenue(payload.new); })
+      .subscribe();
+
+    return () => { supabase.removeChannel(qSub); supabase.removeChannel(vSub); };
+  }, [venue?.id]); // eslint-disable-line
 
   // Presence: broadcast identity to host's Users tab
   useEffect(() => {
@@ -160,17 +173,21 @@ export default function GuestRoom() {
         <CreditBalance balance={credits} />
       </div>
 
-      {/* Paused banner */}
-      {venue.jukebox_paused && (
-        <div style={{ background: 'rgba(255,107,53,0.08)', borderBottom: '1px solid rgba(255,107,53,0.3)', padding: '10px 16px', fontSize: 13, color: '#FF6B35', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <Pause size={14} /> The jukebox is paused — song requests are temporarily disabled
-        </div>
-      )}
-
       <div style={{ padding: '12px 16px' }}>
         <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
       </div>
 
+      {/* Paused — replace entire content area */}
+      {venue.jukebox_paused ? (
+        <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <Pause size={52} color="#FF6B35" style={{ marginBottom: 16, opacity: 0.7 }} />
+          <h2 style={{ margin: '0 0 10px', color: '#F0E6D3', fontSize: 20 }}>Jukebox Paused</h2>
+          <p style={{ margin: 0, color: '#8B6F52', fontSize: 14 }}>
+            The host has paused song requests.<br />Check back in a moment!
+          </p>
+        </div>
+      ) : (
+        <>
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, padding: '0 16px 12px', borderBottom: '1px solid #2A1F17' }}>
         {tabs.map(({ key, icon, label }) => (
@@ -231,6 +248,8 @@ export default function GuestRoom() {
             <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setSelected(null)}>{t.cancel}</button>
           </div>
         </div>
+      )}
+        </>
       )}
 
       {toast && (
