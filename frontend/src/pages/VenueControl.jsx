@@ -212,7 +212,7 @@ export default function VenueControl() {
           <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
             {tab === 'queue' && <QueueDisplay items={queue} isHost onRemove={handleRemove} onSkip={handleSkip} nowPlaying={nowPlaying} />}
             {tab === 'vibe' && <VibeSettings venue={venue} onUpdate={handleVenueUpdate} />}
-            {tab === 'ban' && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} vibeDescription={venue.vibe_description ?? ''} />}
+            {tab === 'ban' && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />}
             {tab === 'users' && <UsersPanel venueId={id} token={token} />}
             {tab === 'stats' && <StatsPanel stats={stats} />}
             {tab === 'qr' && <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}><VenueQRCode roomCode={venue.room_code} size={220} /></div>}
@@ -285,7 +285,7 @@ function VibeSettings({ venue, onUpdate }) {
 
 // ── Ban manager ───────────────────────────────────────────────────────────────
 
-function BanManager({ venueId, token, banned, bannedIds, onReload, vibeDescription }) {
+function BanManager({ venueId, token, banned, bannedIds, onReload }) {
   const { t } = useLang();
   const [selected, setSelected] = useState(null);
 
@@ -301,7 +301,7 @@ function BanManager({ venueId, token, banned, bannedIds, onReload, vibeDescripti
   return (
     <div>
       <h3 style={{ marginTop: 0, color: '#F0E6D3' }}>{t.banSong}</h3>
-      <SongSearch bannedIds={bannedIds} onSelect={setSelected} vibeDescription={vibeDescription} />
+      <SongSearch bannedIds={bannedIds} onSelect={setSelected} />
 
       {selected && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,10,7,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
