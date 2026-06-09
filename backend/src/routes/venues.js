@@ -173,7 +173,7 @@ router.post('/:id/gift', requireAuth, async (req, res) => {
 
   const newBalance = (profile.credits_balance ?? 0) + Number(amount);
   const { error: updateErr } = await supabaseAdmin
-    .from('profiles')
+    .from('users')
     .update({ credits_balance: newBalance })
     .eq('id', profile.id);
 
@@ -235,14 +235,15 @@ router.delete('/:id/users/:name', requireAuth, async (req, res) => {
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
   const name = decodeURIComponent(req.params.name);
-  // Mark their items 'removed' so GET /users (which queries pending/playing/played)
-  // no longer includes them. Avoids RLS-blocked DELETEs and preserves audit trail.
+
+  // Delete all non-playing items for this user.
+  // supabaseAdmin (service role) bypasses RLS so this always works.
   const { error } = await supabaseAdmin
     .from('queue_items')
-    .update({ status: 'removed' })
+    .delete()
     .eq('venue_id', req.params.id)
     .eq('requester_name', name)
-    .in('status', ['pending', 'played']); // leave 'playing' alone
+    .neq('status', 'playing'); // leave the currently-playing song alone
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });

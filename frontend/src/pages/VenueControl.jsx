@@ -473,21 +473,6 @@ function UsersPanel({ venueId, token }) {
     }
   }
 
-  // When a removed user makes a new song request, clear them so they reappear
-  useEffect(() => {
-    if (!removedNames.size) return;
-    const currentRequesters = new Set(users.map(u => u.name));
-    const rejoinedNames = [...removedNames].filter(n => currentRequesters.has(n));
-    if (!rejoinedNames.length) return;
-    // Clear from state and localStorage
-    setRemovedNames(prev => { const next = new Set(prev); rejoinedNames.forEach(n => next.delete(n)); return next; });
-    try {
-      const key = `nb_removed_${venueId}`;
-      const saved = JSON.parse(localStorage.getItem(key) ?? '[]');
-      localStorage.setItem(key, JSON.stringify(saved.filter(n => !rejoinedNames.includes(n))));
-    } catch {}
-  }, [users]); // eslint-disable-line
-
   // Merge online presence users with historical requesters
   // Filter out removed users from both sources
   const onlineNames = new Set(onlineUsers.map(u => u.name));
