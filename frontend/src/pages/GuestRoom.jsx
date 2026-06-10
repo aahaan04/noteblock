@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Search, ListMusic, Clock, Music, Pause } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
@@ -27,6 +27,7 @@ export default function GuestRoom() {
   const [sessionHistory, setSessionHistory] = useState([]);
   const [tab, setTab] = useState('search');
   const [toast, setToast] = useState('');
+  const prevCreditsRef = useRef(null);
 
   // Redirect to join if not authenticated
   useEffect(() => {
@@ -36,8 +37,33 @@ export default function GuestRoom() {
   useEffect(() => { if (token) loadVenue(); }, [roomCode, token]);
 
   useEffect(() => {
-    setCredits(profile?.credits_balance ?? 0);
-  }, [profile]);
+    const bal = profile?.credits_balance ?? 0;
+    setCredits(bal);
+    prevCreditsRef.current = bal;
+  }, [profile?.id]); // initialise once per session, not on every balance change
+
+  // Real-time: watch our own users row for credit gifts from the host
+  useEffect(() => {
+    if (!profile?.id) return;
+    const sub = supabase
+      .channel(`credits-${profile.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'users',
+        filter: `id=eq.${profile.id}`,
+      }, (payload) => {
+        const newBal = payload.new?.credits_balance ?? 0;
+        const prev = prevCreditsRef.current ?? 0;
+        const diff = newBal - prev;
+        if (diff > 0) {
+          // Credits increased — must be a gift (spending always goes through handleConfirm which updates locally)
+          showToast(`🎁 You've been gifted ${diff} credit${diff !== 1 ? 's' : ''}! You now have ${newBal} credit${newBal !== 1 ? 's' : ''}.`, 5000);
+        }
+        prevCreditsRef.current = newBal;
+        setCredits(newBal);
+      })
+      .subscribe();
+    return () => supabase.removeChannel(sub);
+  }, [profile?.id]); // eslint-disable-line
 
   async function loadVenue() {
     try {
@@ -119,6 +145,7 @@ export default function GuestRoom() {
         thumbnail_url: selected.thumbnail, play_type: playType, requester_name: requesterName,
       }, token);
       const newBalance = credits - result.credits_charged;
+      prevCreditsRef.current = newBalance;
       setCredits(newBalance);
       refreshProfile();
       setSessionHistory(prev => [{ ...selected, playType, credits: result.credits_charged }, ...prev]);
@@ -134,9 +161,9 @@ export default function GuestRoom() {
     }
   }
 
-  function showToast(msg) {
+  function showToast(msg, duration = 3000) {
     setToast(msg);
-    setTimeout(() => setToast(''), 3000);
+    setTimeout(() => setToast(''), duration);
   }
 
   const nowPlayingItem = queue.find(i => i.status === 'playing');

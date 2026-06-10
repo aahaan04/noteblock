@@ -592,7 +592,7 @@ function UsersPanel({ venueId, token }) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState(null); // { type: 'ban'|'gift'|'remove', user }
-  const [giftAmount, setGiftAmount] = useState(10);
+  const [giftAmount, setGiftAmount] = useState('10'); // keep as string so input is freely editable
   const [giftMsg, setGiftMsg] = useState('');
   const [openMenu, setOpenMenu] = useState(null);
 
@@ -677,9 +677,11 @@ function UsersPanel({ venueId, token }) {
     api.venues.removeUser(venueId, name, token).catch(() => {});
   }
   async function handleGift(name) {
+    const parsed = parseInt(giftAmount);
+    if (!parsed || parsed < 1) { setGiftMsg('Enter a valid amount (minimum 1)'); return; }
     try {
-      await api.venues.gift(venueId, { guest_identifier: name, amount: giftAmount }, token);
-      setGiftMsg(`✓ ${giftAmount} credits sent to ${name}`);
+      await api.venues.gift(venueId, { guest_identifier: name, amount: parsed }, token);
+      setGiftMsg(`✓ ${parsed} credits sent to ${name}`);
       setTimeout(() => { setGiftMsg(''); setModal(null); }, 2500);
     } catch (err) {
       const msg = err.data?.message ?? err.data?.error ?? 'error';
@@ -811,7 +813,7 @@ function UsersPanel({ venueId, token }) {
                     boxShadow: '0 8px 24px rgba(0,0,0,0.5)', overflow: 'hidden',
                   }}>
                     <MenuBtn icon={<Gift size={14} />} label="Gift Credits" color="#C89B6E"
-                      onClick={() => { setOpenMenu(null); setGiftAmount(10); setGiftMsg(''); setModal({ type: 'gift', user: u }); }} />
+                      onClick={() => { setOpenMenu(null); setGiftAmount('10'); setGiftMsg(''); setModal({ type: 'gift', user: u }); }} />
                     <MenuBtn icon={<X size={14} />} label="Remove from Room" color="#8B6F52"
                       onClick={() => { setOpenMenu(null); setModal({ type: 'remove', user: u }); }} />
                     {u.banned
@@ -871,25 +873,34 @@ function UsersPanel({ venueId, token }) {
                 <AlertTriangle size={11} /> This user appears to be a guest. Gifted credits only land in accounts — ask them to sign in first if they want to receive them.
               </p>
             )}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              {[5, 10, 20, 50].map(amt => (
-                <button key={amt} onClick={() => setGiftAmount(amt)} style={{
+            {/* Quick presets */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              {[10, 25, 50, 100].map(amt => (
+                <button key={amt} onClick={() => setGiftAmount(String(amt))} style={{
                   flex: 1, padding: '8px 0', borderRadius: 7,
-                  border: `1px solid ${giftAmount === amt ? '#FF6B35' : '#2A1F17'}`,
-                  background: giftAmount === amt ? 'rgba(255,107,53,0.15)' : '#1A1008',
-                  color: giftAmount === amt ? '#FF6B35' : '#F0E6D3',
+                  border: `1px solid ${giftAmount === String(amt) ? '#FF6B35' : '#2A1F17'}`,
+                  background: giftAmount === String(amt) ? 'rgba(255,107,53,0.15)' : '#1A1008',
+                  color: giftAmount === String(amt) ? '#FF6B35' : '#F0E6D3',
                   cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: 'inherit',
                 }}>
                   {amt}
                 </button>
               ))}
             </div>
-            <input className="input" type="number" min={1} max={500} value={giftAmount}
-              onChange={e => setGiftAmount(parseInt(e.target.value) || 1)} style={{ marginBottom: 14 }} />
-            {giftMsg && <p style={{ margin: '0 0 12px', fontSize: 13, color: giftMsg.includes('Failed') ? '#f87171' : '#34d399' }}>{giftMsg}</p>}
+            {/* Free-form input — allows backspace / any whole number */}
+            <input
+              className="input"
+              type="number"
+              min={1}
+              placeholder="Custom amount…"
+              value={giftAmount}
+              onChange={e => setGiftAmount(e.target.value)}
+              style={{ marginBottom: 14 }}
+            />
+            {giftMsg && <p style={{ margin: '0 0 12px', fontSize: 13, color: giftMsg.startsWith('✓') ? '#34d399' : '#f87171' }}>{giftMsg}</p>}
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn-primary" style={{ flex: 1 }} onClick={() => handleGift(modal.user.name)}>
-                <Gift size={15} /> Gift {giftAmount} Credits
+                <Gift size={15} /> Gift {parseInt(giftAmount) > 0 ? parseInt(giftAmount) : '…'} Credits
               </button>
               <button className="btn-secondary" onClick={() => setModal(null)}>Cancel</button>
             </div>
