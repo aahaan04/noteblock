@@ -83,6 +83,15 @@ export default function GuestRoom() {
     setQueue(q);
   }
 
+  async function refreshVenue(venueId) {
+    const id = venueId ?? venue?.id;
+    if (!id) return;
+    try {
+      const v = await api.venues.getByCode(roomCode);
+      setVenue(v);
+    } catch {}
+  }
+
   async function loadBanned(venueId) {
     const id = venueId ?? venue?.id;
     if (!id) return;
@@ -107,15 +116,23 @@ export default function GuestRoom() {
         })
       .subscribe();
 
-    // Also subscribe to venue changes so jukebox_paused / queue_open_when_paused update live
+    // Subscribe to venue changes (no filter — filtered subscriptions silently fail on free tier)
+    // Check venue.id manually in callback
     const vSub = supabase
       .channel(`guest-venue-${venue.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues' },
-        (payload) => { if (payload.new?.id === venue.id) setVenue(payload.new); })
+        (payload) => {
+          if (payload.new?.id === venue.id) {
+            setVenue(payload.new);
+          }
+        })
       .subscribe();
 
-    // Polling fallback — guarantees now-playing updates even if real-time is silent
-    const poll = setInterval(() => loadQueue(venue.id), 8000);
+    // Polling fallback — guarantees now-playing AND paused state update even if real-time is silent
+    const poll = setInterval(() => {
+      loadQueue(venue.id);
+      refreshVenue(venue.id);
+    }, 5000);
 
     return () => {
       supabase.removeChannel(qSub);
