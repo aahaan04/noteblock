@@ -12,6 +12,8 @@ import QueueDisplay from '../components/QueueDisplay.jsx';
 import NowPlaying from '../components/NowPlaying.jsx';
 import CreditBalance from '../components/CreditBalance.jsx';
 
+const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
+
 export default function GuestRoom() {
   const { roomCode } = useParams();
   const { profile, token, refreshProfile } = useAuth();
@@ -56,7 +58,7 @@ export default function GuestRoom() {
         const diff = newBal - prev;
         if (diff > 0) {
           // Credits increased — must be a gift (spending always goes through handleConfirm which updates locally)
-          showToast(`🎁 You've been gifted ${diff} credit${diff !== 1 ? 's' : ''}! You now have ${newBal} credit${newBal !== 1 ? 's' : ''}.`, 5000);
+          showToast(`You have been gifted ${diff} credit${diff !== 1 ? 's' : ''}! You now have ${newBal}.`, 5000);
         }
         prevCreditsRef.current = newBal;
         setCredits(newBal);
@@ -192,20 +194,21 @@ export default function GuestRoom() {
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 0 80px', minHeight: '100vh', background: '#0E0A07' }}>
-      {/* Header */}
+      {/* Header — 52px sticky */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 50,
         background: '#120C06', borderBottom: '1px solid #2A1F17',
-        padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
+        height: 52, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12,
       }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3', display: 'flex', alignItems: 'center', gap: 7 }}>
-            <Logo size={20} /> {venue.name}
-          </div>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
+          <Logo size={20} />
+          <span style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3' }}>
+            {venue.name}
+          </span>
           {vibeActive && (
-            <div style={{ fontSize: 11, color: '#FF6B35', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <span style={{ fontSize: 11, color: '#FF6B35', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
               <Music size={11} /> {t.vibeMode}
-            </div>
+            </span>
           )}
         </div>
         <CreditBalance balance={credits} />
@@ -217,15 +220,15 @@ export default function GuestRoom() {
         <div style={{ padding: '12px 16px 0' }}>
           <div style={{
             background: '#1A1008', border: '1px solid #2A1F17',
-            borderRadius: 10, padding: '18px 20px',
+            borderRadius: 10, padding: '12px 16px',
             display: 'flex', alignItems: 'center', gap: 14,
           }}>
-            <Pause size={28} color="#5A4535" style={{ flexShrink: 0 }} />
+            <Pause size={24} color="#5A4535" style={{ flexShrink: 0 }} />
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: '#F0E6D3', marginBottom: 3 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#F0E6D3', marginBottom: 2 }}>
                 Jukebox is off
               </div>
-              <div style={{ fontSize: 13, color: '#8B6F52' }}>
+              <div style={{ fontSize: 12, color: '#8B6F52' }}>
                 Song requests are closed right now. Check back soon!
               </div>
             </div>
@@ -236,13 +239,13 @@ export default function GuestRoom() {
         <div style={{ padding: '12px 16px 0' }}>
           <div style={{
             background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)',
-            borderRadius: 10, padding: '14px 16px',
+            borderRadius: 10, padding: '12px 16px',
             display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#34d399',
           }}>
             <ListMusic size={16} style={{ flexShrink: 0 }} />
             <div>
               <div style={{ fontWeight: 700, marginBottom: 2 }}>Queuing mode</div>
-              <div style={{ fontSize: 12, color: '#6ee7b7' }}>Add songs now — they'll play when the host starts the jukebox.</div>
+              <div style={{ fontSize: 12, color: '#6ee7b7' }}>Add songs now — they play when the host starts.</div>
             </div>
           </div>
         </div>
@@ -258,13 +261,13 @@ export default function GuestRoom() {
         <>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, padding: '0 16px 12px', borderBottom: '1px solid #2A1F17' }}>
+      <div style={{ display: 'flex', gap: 4, padding: '10px 16px', borderBottom: '1px solid #2A1F17' }}>
         {tabs.map(({ key, icon, label }) => (
           <button key={key} onClick={() => setTab(key)} style={{
-            padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12,
-            background: tab === key ? '#FF6B35' : '#1A1008',
-            color: tab === key ? '#F0E6D3' : '#8B6F52',
-            fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit',
+            flex: 1, minHeight: 44, padding: '6px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12,
+            background: tab === key ? '#FF6B35' : 'transparent',
+            color: tab === key ? '#0E0A07' : '#8B6F52',
+            fontWeight: tab === key ? 700 : 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontFamily: 'inherit',
           }}>
             {icon} {label}
           </button>
@@ -300,16 +303,16 @@ export default function GuestRoom() {
             <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
               {selected.thumbnail && <img src={selected.thumbnail} alt="" style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 8 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3' }}>{selected.title}</div>
-                <div style={{ fontSize: 12, color: '#8B6F52' }}>{selected.channel}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3' }}>{decode(selected.title)}</div>
+                <div style={{ fontSize: 12, color: '#8B6F52' }}>{decode(selected.channel)}</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-              <button style={{ flex: 1, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= 2 ? '#3D2B1A' : '#1A1008', color: credits >= 2 ? '#F0E6D3' : '#5A4535', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < 2 ? 0.5 : 1 }}
+              <button style={{ flex: 1, minHeight: 56, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= 2 ? '#3D2B1A' : '#1A1008', color: credits >= 2 ? '#F0E6D3' : '#5A4535', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < 2 ? 0.5 : 1 }}
                 onClick={() => handleConfirm('normal')} disabled={credits < 2}>
                 {t.normalPlay}<br /><span style={{ fontSize: 12, fontWeight: 400, color: '#8B6F52' }}>2 {t.credits}</span>
               </button>
-              <button style={{ flex: 1, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= quickPrice ? '#FF6B35' : '#1A1008', color: '#F0E6D3', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < quickPrice ? 0.5 : 1, boxShadow: credits >= quickPrice ? '0 0 14px rgba(255,107,53,0.4)' : 'none' }}
+              <button style={{ flex: 1, minHeight: 56, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= quickPrice ? '#FF6B35' : '#1A1008', color: '#F0E6D3', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < quickPrice ? 0.5 : 1, boxShadow: credits >= quickPrice ? '0 0 16px rgba(255,107,53,0.45)' : 'none' }}
                 onClick={() => handleConfirm('quick')} disabled={credits < quickPrice}>
                 Quick Play<br /><span style={{ fontSize: 12, fontWeight: 400 }}>{quickPrice} {t.credits}</span>
               </button>

@@ -1,5 +1,16 @@
 /* ── Noteblock Design System ─────────────────────────────────────── */
 
+:root { color-scheme: dark; }
+
+[data-theme="dark"] {
+  --bg: #0E0A07; --page: #120C06; --card: #1A1008; --border: #2A1F17;
+  --text: #F0E6D3; --text2: #8B6F52; --muted: #5A4535;
+}
+[data-theme="light"] {
+  --bg: #FAF5EF; --page: #F2EAE0; --card: #FFF8F2; --border: #E8D9C8;
+  --text: #1A0E06; --text2: #7A5C42; --muted: #B89880;
+}
+
 :root {
   /* Backgrounds */
   --bg:        #120C06;

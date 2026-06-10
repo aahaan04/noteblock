@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, LogOut, Plus, QrCode, ChevronUp, ChevronDown, Home } from 'lucide-react';
+import { Settings, Plus, QrCode, Home } from 'lucide-react';
 
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 480);
@@ -24,7 +24,7 @@ function makeRoomCode() {
 }
 
 export default function HostDashboard() {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user } = useAuth();
   const { t } = useLang();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -66,23 +66,25 @@ export default function HostDashboard() {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 16px', minHeight: '100vh', background: '#0E0A07' }}>
+    <div style={{
+      maxWidth: 800, margin: '0 auto', padding: '20px 16px', minHeight: '100vh',
+      background: 'radial-gradient(ellipse at 50% 30%, rgba(255,107,53,0.04) 0%, transparent 60%), #0E0A07',
+    }}>
 
       {/* ── Header ── */}
       <div style={{ marginBottom: 28 }}>
-        {/* Top row: logo + action buttons */}
+        {/* Top row: logo + settings icon only */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
           <Logo size={30} />
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#F0E6D3', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Noteblock
           </h1>
-          <button className="btn-secondary" onClick={() => navigate('/settings')}
-            style={{ fontSize: 13, padding: '8px 12px', flexShrink: 0 }}>
-            <Settings size={15} />{!isMobile && <> {t.settings}</>}
-          </button>
-          <button className="btn-secondary" onClick={signOut}
-            style={{ fontSize: 13, padding: '8px 12px', flexShrink: 0 }}>
-            <LogOut size={15} />{!isMobile && <> {t.logout}</>}
+          <button
+            onClick={() => navigate('/settings')}
+            style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center', flexShrink: 0 }}
+            title={t.settings}
+          >
+            <Settings size={18} />
           </button>
         </div>
         <p style={{ margin: 0, color: '#8B6F52', fontSize: 13, paddingLeft: 40 }}>{profile?.display_name}</p>
@@ -90,9 +92,9 @@ export default function HostDashboard() {
 
       {/* ── Venues header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 18, color: '#F0E6D3' }}>{t.myVenues}</h2>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#F0E6D3' }}>{t.myVenues}</h2>
         <button className="btn-primary" onClick={() => { setShowCreate(true); setCreateError(''); }}
-          style={{ fontSize: 13, padding: '9px 16px' }}>
+          style={{ fontSize: 13, padding: '9px 16px', boxShadow: '0 0 16px rgba(255,107,53,0.35)' }}>
           <Plus size={15} /> {t.createVenue}
         </button>
       </div>
@@ -133,6 +135,7 @@ export default function HostDashboard() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {venues.map(venue => (
           <VenueCard key={venue.id} venue={venue}
+            isMobile={isMobile}
             onManage={() => navigate(`/host/venue/${venue.id}`)}
             showQR={expandedQR === venue.id}
             onToggleQR={() => setExpandedQR(expandedQR === venue.id ? null : venue.id)}
@@ -145,7 +148,7 @@ export default function HostDashboard() {
   );
 }
 
-function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange }) {
+function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobile }) {
   const { t } = useLang();
   const [toggling, setToggling] = useState(false);
 
@@ -160,39 +163,59 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange }) {
   const isActive = venue.status === 'active';
 
   return (
-    <div style={{ background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 12, padding: '16px' }}>
+    <div style={{ background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 12, padding: '20px' }}>
       {/* Venue name + status badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#F0E6D3', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#F0E6D3', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {venue.name}
         </h3>
         <span style={{
           fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0,
-          background: isActive ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
-          color: isActive ? '#34d399' : '#f87171',
+          background: isActive ? 'rgba(52,211,153,0.12)' : '#2A1F17',
+          color: isActive ? '#34d399' : '#5A4535',
         }}>
           {isActive ? t.active : t.closed}
         </span>
       </div>
 
-      {/* Room code */}
-      <div style={{ fontSize: 12, color: '#5A4535', fontFamily: 'monospace', letterSpacing: 2, marginBottom: 14 }}>
-        {venue.room_code}
+      {/* Room code badge */}
+      <div style={{ marginBottom: 16 }}>
+        <span style={{
+          background: '#2A1F17', color: '#8B6F52', borderRadius: 6,
+          padding: '4px 10px', fontFamily: 'monospace', letterSpacing: 2, fontSize: 12,
+        }}>
+          {venue.room_code}
+        </span>
       </div>
 
-      {/* Action buttons — stacked on mobile */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button className="btn-secondary" style={{ padding: '9px 12px', flexShrink: 0 }} onClick={onToggleQR} title="QR Code">
-          <QrCode size={15} />
-          {showQR ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-        </button>
-        <button className="btn-secondary" style={{ flex: 1, fontSize: 13 }} onClick={toggleStatus} disabled={toggling}>
-          {isActive ? t.closeRoom : t.openRoomAction}
-        </button>
-        <button className="btn-primary" style={{ flex: 1, fontSize: 13 }} onClick={onManage}>
-          {t.manageVenue}
-        </button>
-      </div>
+      {/* Action buttons — stacked on mobile, side-by-side on desktop */}
+      {isMobile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button className="btn-primary" style={{ width: '100%', fontSize: 14, boxShadow: '0 0 14px rgba(255,107,53,0.35)' }} onClick={onManage}>
+            {t.manageVenue}
+          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-secondary" style={{ flex: 1, fontSize: 13 }} onClick={toggleStatus} disabled={toggling}>
+              {isActive ? t.closeRoom : t.openRoomAction}
+            </button>
+            <button className="btn-secondary" style={{ padding: '9px 12px', flexShrink: 0 }} onClick={onToggleQR} title="QR Code">
+              <QrCode size={15} />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-secondary" style={{ padding: '9px 12px', flexShrink: 0 }} onClick={onToggleQR} title="QR Code">
+            <QrCode size={15} />
+          </button>
+          <button className="btn-secondary" style={{ flex: 1, fontSize: 13 }} onClick={toggleStatus} disabled={toggling}>
+            {isActive ? t.closeRoom : t.openRoomAction}
+          </button>
+          <button className="btn-primary" style={{ flex: 1, fontSize: 13, boxShadow: '0 0 14px rgba(255,107,53,0.35)' }} onClick={onManage}>
+            {t.manageVenue}
+          </button>
+        </div>
+      )}
 
       {showQR && (
         <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #2A1F17', display: 'flex', justifyContent: 'center' }}>

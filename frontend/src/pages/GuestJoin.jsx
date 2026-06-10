@@ -104,22 +104,30 @@ export default function GuestJoin() {
     }
   }
 
+  const outerStyle = {
+    minHeight: '100svh', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center', padding: '24px 16px',
+    background: 'radial-gradient(ellipse at center, rgba(255,107,53,0.06) 0%, transparent 70%), #0E0A07',
+  };
+
   // ── Error state ───────────────────────────────────────────────────────────────
   if (venueError) return (
-    <div className="center-screen">
+    <div style={outerStyle}>
       <Music size={48} color="#2A1F17" style={{ marginBottom: 16 }} />
       <p style={{ color: '#f87171' }}>{venueError}</p>
-      <button className="btn-secondary" onClick={() => navigate('/')}>← Home</button>
+      <button className="btn-secondary" onClick={() => navigate('/')}>
+        <ArrowRight size={14} style={{ transform: 'rotate(180deg)' }} /> Home
+      </button>
       <VersionFooter />
     </div>
   );
 
   // ── Detecting / loading ───────────────────────────────────────────────────────
   if (phase === 'detecting' || (!venue && !venueError)) return (
-    <div className="center-screen">
+    <div style={outerStyle}>
       <Loader size={32} color="#FF6B35" style={{ marginBottom: 16, animation: 'spin 1s linear infinite' }} />
       <p style={{ color: '#8B6F52', fontSize: 14 }}>
-        {!venue ? 'Loading room…' : 'Signing you in…'}
+        {!venue ? 'Loading room...' : 'Signing you in...'}
       </p>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       <VersionFooter />
@@ -127,44 +135,37 @@ export default function GuestJoin() {
   );
 
   return (
-    <div className="center-screen">
-      <div style={{ width: '100%', maxWidth: 340 }}>
+    <div style={outerStyle}>
+      <div style={{ width: '100%', maxWidth: 360 }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
-            <Logo size={44} />
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+            <Logo size={64} />
           </div>
-          <p style={{ color: '#8B6F52', margin: '0 0 4px', fontSize: 13 }}>Joining</p>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: '#F0E6D3' }}>{venue.name}</h1>
+          <h1 style={{ margin: '0 0 4px', fontSize: 28, fontWeight: 900, color: '#F0E6D3' }}>{venue.name}</h1>
+          <p style={{ color: '#8B6F52', margin: 0, fontSize: 13 }}>Request songs for this venue</p>
         </div>
 
         {/* ── Phase: email ── */}
         {phase === 'email' && (
           <form onSubmit={handleSendLink} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#8B6F52', marginBottom: 6 }}>
-                <Mail size={12} /> Your email
-              </label>
-              <input
-                className="input"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                autoFocus
-                style={{ fontSize: 16 }}
-              />
-              <p style={{ margin: '6px 0 0', fontSize: 11, color: '#5A4535' }}>
-                We'll send a magic link — no password needed
-              </p>
-            </div>
+            <input
+              className="input"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              autoFocus
+              style={{ fontSize: 16, height: 48, paddingLeft: 16, paddingRight: 16 }}
+            />
             {error && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>{error}</p>}
-            <button className="btn-primary" type="submit" disabled={busy} style={{ padding: 14, fontSize: 15 }}>
-              {busy ? 'Sending…' : <><Mail size={16} /> Send Magic Link</>}
+            <button className="btn-primary" type="submit" disabled={busy}
+              style={{ width: '100%', height: 52, fontSize: 16, boxShadow: '0 0 20px rgba(255,107,53,0.4)' }}>
+              {busy ? 'Sending...' : <><Mail size={16} /> Send Magic Link</>}
             </button>
             {venue.welcome_credits > 0 && (
-              <p style={{ textAlign: 'center', fontSize: 12, color: '#8B6F52', margin: 0 }}>
-                Get <strong style={{ color: '#FF6B35' }}>{venue.welcome_credits} free credits</strong> on your first visit
+              <p style={{ textAlign: 'center', fontSize: 13, color: '#8B6F52', margin: 0 }}>
+                Get {venue.welcome_credits} <strong style={{ color: '#C89B6E' }}>free credits</strong> on first visit
               </p>
             )}
           </form>
@@ -173,9 +174,9 @@ export default function GuestJoin() {
         {/* ── Phase: sent ── */}
         {phase === 'sent' && (
           <div style={{ textAlign: 'center' }}>
-            <CheckCircle size={52} color="#34d399" style={{ marginBottom: 16 }} />
+            <CheckCircle size={56} color="#34d399" style={{ marginBottom: 16 }} />
             <h2 style={{ margin: '0 0 8px', color: '#F0E6D3', fontSize: 20 }}>Check your email</h2>
-            <p style={{ color: '#8B6F52', fontSize: 14, margin: '0 0 24px' }}>
+            <p style={{ color: '#8B6F52', fontSize: 14, margin: '0 0 16px' }}>
               We sent a magic link to<br />
               <strong style={{ color: '#F0E6D3' }}>{email}</strong>
             </p>
@@ -186,7 +187,7 @@ export default function GuestJoin() {
               style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', fontSize: 13 }}
               onClick={() => { setPhase('email'); setError(''); }}
             >
-              ← Use a different email
+              Use a different email
             </button>
           </div>
         )}
@@ -199,7 +200,7 @@ export default function GuestJoin() {
                 <User size={12} /> Your display name
               </label>
               <p style={{ margin: '0 0 10px', fontSize: 13, color: '#8B6F52' }}>
-                This is how you'll appear when requesting songs.
+                This is how you appear when requesting songs.
               </p>
               <input
                 className="input"
@@ -209,12 +210,13 @@ export default function GuestJoin() {
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
                 autoFocus
-                style={{ fontSize: 17 }}
+                style={{ fontSize: 17, height: 48 }}
               />
             </div>
             {error && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>{error}</p>}
-            <button className="btn-primary" type="submit" disabled={busy} style={{ padding: 14, fontSize: 15 }}>
-              {busy ? 'Entering room…' : <>Enter Room <ArrowRight size={16} /></>}
+            <button className="btn-primary" type="submit" disabled={busy}
+              style={{ width: '100%', height: 52, fontSize: 16, boxShadow: '0 0 20px rgba(255,107,53,0.4)' }}>
+              {busy ? 'Entering room...' : <>Enter Room <ArrowRight size={16} /></>}
             </button>
           </form>
         )}

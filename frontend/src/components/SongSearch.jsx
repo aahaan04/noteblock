@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import { useLang } from '../context/LangContext.jsx';
 
 const PAGE_SIZE = 5;
+const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
 export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescription = '' }) {
   const { t } = useLang();
@@ -167,10 +168,10 @@ function SongCard({ song, onSelect, accent }) {
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: 14, color: '#F0E6D3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {song.title}
+          {decode(song.title)}
         </div>
         <div style={{ fontSize: 12, color: '#8B6F52' }}>
-          {song.channel}
+          {decode(song.channel)}
           {song.duration && ` · ${song.duration}`}
         </div>
       </div>

@@ -4,7 +4,10 @@ import {
   ArrowLeft, Music, Play, Pause, SkipForward, ListMusic, Radio,
   Ban, Users, BarChart2, QrCode, RefreshCw, MoreHorizontal,
   Gift, Check, X, ChevronUp, ChevronDown, Save, AlertTriangle, Settings2,
+  Download, ShieldOff,
 } from 'lucide-react';
+
+const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(() => window.innerWidth < 768);
@@ -170,7 +173,23 @@ export default function VenueControl() {
       {tab === 'ban'    && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />}
       {tab === 'users'  && <UsersPanel venueId={id} token={token} />}
       {tab === 'stats'  && <StatsPanel stats={stats} />}
-      {tab === 'qr'     && <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}><VenueQRCode roomCode={venue.room_code} size={220} /></div>}
+      {tab === 'qr'     && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 24, gap: 16 }}>
+          <div style={{ background: '#fff', padding: 16, borderRadius: 12 }}>
+            <VenueQRCode roomCode={venue.room_code} size={248} />
+          </div>
+          <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: '#FF6B35', letterSpacing: 4 }}>
+            {venue.room_code}
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: '#5A4535', textAlign: 'center' }}>
+            Guests can scan this to join your room
+          </p>
+          <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={() => window.print()}>
+            <Download size={15} /> Download QR
+          </button>
+        </div>
+      )}
     </>
   );
 
@@ -429,8 +448,8 @@ function VibeSettings({ venue, onUpdate }) {
         }}>
           <p style={{ margin: 0, fontSize: 13, color: '#F0E6D3', lineHeight: 1.5 }}>
             {pendingToggle.newVal
-              ? '⚡ Guests will be able to request songs while the jukebox is paused. Their songs will queue up and play when you start the jukebox.'
-              : '🔒 Guests will NOT be able to request songs while the jukebox is paused. Requests will be blocked until you start the jukebox.'}
+              ? 'Guests will be able to request songs while the jukebox is paused. Their songs will queue up and play when you start the jukebox.'
+              : 'Guests will NOT be able to request songs while the jukebox is paused. Requests will be blocked until you start the jukebox.'}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn-primary" style={{ flex: 1, fontSize: 13 }} onClick={confirmQueueToggle}>
@@ -532,11 +551,17 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
       )}
 
       <h3 style={{ marginTop: 24, color: '#F0E6D3' }}>{t.bannedSongs}</h3>
-      {!banned.length && <p style={{ color: '#8B6F52' }}>None</p>}
+      {!banned.length && (
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <ShieldOff size={40} color="#2A1F17" style={{ marginBottom: 8 }} />
+          <div style={{ color: '#5A4535', fontSize: 14 }}>No songs banned</div>
+        </div>
+      )}
       {banned.map(b => (
         <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 7, padding: '8px 12px', marginBottom: 8 }}>
-          <span style={{ flex: 1, fontSize: 14, color: '#F0E6D3' }}>{b.song_title}</span>
-          <button onClick={() => handleUnban(b.id)} style={{ background: 'none', border: 'none', color: '#FF6B35', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
+          {b.thumbnail_url && <img src={b.thumbnail_url} alt="" style={{ width: 40, height: 30, objectFit: 'cover', borderRadius: 4 }} />}
+          <span style={{ flex: 1, fontSize: 14, color: '#F0E6D3', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(b.song_title)}</span>
+          <button onClick={() => handleUnban(b.id)} style={{ background: 'none', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6, color: '#f87171', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', padding: '3px 10px' }}>
             {t.unban}
           </button>
         </div>
@@ -552,15 +577,18 @@ function StatsPanel({ stats }) {
   if (!stats) return <p style={{ color: '#8B6F52' }}>{t.loading}</p>;
   return (
     <div>
-      <div style={{ display: 'flex', gap: 20, marginBottom: 24 }}>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
         <StatCard label={t.requestsToday} value={stats.totalRequests} />
         <StatCard label={t.creditsDistributed} value={stats.totalCredits} />
       </div>
-      <h3 style={{ color: '#F0E6D3' }}>{t.topSongs}</h3>
+      <h3 style={{ color: '#F0E6D3', marginTop: 0, marginBottom: 12 }}>{t.topSongs}</h3>
       {stats.topSongs.map((s, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #2A1F17', fontSize: 14 }}>
-          <span style={{ color: '#F0E6D3' }}>{s.title}</span>
-          <span style={{ color: '#8B6F52', fontVariantNumeric: 'tabular-nums' }}>{s.count}×</span>
+        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid #2A1F17', fontSize: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ color: '#5A4535', fontFamily: 'monospace', minWidth: 18, fontSize: 13 }}>{i + 1}</span>
+            <span style={{ color: '#F0E6D3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(s.title)}</span>
+          </div>
+          <span style={{ background: '#2A1F17', color: '#8B6F52', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0, marginLeft: 8 }}>{s.count}x</span>
         </div>
       ))}
     </div>
@@ -570,8 +598,8 @@ function StatsPanel({ stats }) {
 function StatCard({ label, value }) {
   return (
     <div style={{ flex: 1, background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 10, padding: '16px 20px', textAlign: 'center' }}>
-      <div style={{ fontSize: 28, fontWeight: 800, color: '#FF6B35' }}>{value}</div>
-      <div style={{ fontSize: 12, color: '#8B6F52', marginTop: 4 }}>{label}</div>
+      <div style={{ fontSize: 36, fontWeight: 800, color: '#FF6B35' }}>{value}</div>
+      <div style={{ fontSize: 12, color: '#8B6F52', marginTop: 4, textTransform: 'uppercase', letterSpacing: 2 }}>{label}</div>
     </div>
   );
 }
@@ -681,7 +709,7 @@ function UsersPanel({ venueId, token }) {
     if (!parsed || parsed < 1) { setGiftMsg('Enter a valid amount (minimum 1)'); return; }
     try {
       await api.venues.gift(venueId, { guest_identifier: name, amount: parsed }, token);
-      setGiftMsg(`✓ ${parsed} credits sent to ${name}`);
+      setGiftMsg(`${parsed} credits sent to ${name}`);
       setTimeout(() => { setGiftMsg(''); setModal(null); }, 2500);
     } catch (err) {
       const msg = err.data?.message ?? err.data?.error ?? 'error';
