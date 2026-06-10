@@ -1,6 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings, LogOut, Plus, QrCode, ChevronUp, ChevronDown, Home } from 'lucide-react';
+
+function useIsMobile() {
+  const [m, setM] = useState(() => window.innerWidth < 480);
+  useEffect(() => {
+    const fn = () => setM(window.innerWidth < 480);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return m;
+}
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -17,6 +27,7 @@ export default function HostDashboard() {
   const { profile, user, signOut } = useAuth();
   const { t } = useLang();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const [venues, setVenues] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,48 +66,53 @@ export default function HostDashboard() {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px', minHeight: '100vh', background: '#0E0A07' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Logo size={32} />
-            <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: '#F0E6D3' }}>Noteblock</h1>
-          </div>
-          <p style={{ margin: '4px 0 0', color: '#8B6F52', fontSize: 14 }}>{profile?.display_name}</p>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn-secondary" onClick={() => navigate('/settings')} style={{ fontSize: 13 }}>
-            <Settings size={15} /> {t.settings}
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 16px', minHeight: '100vh', background: '#0E0A07' }}>
+
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 28 }}>
+        {/* Top row: logo + action buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <Logo size={30} />
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#F0E6D3', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Noteblock
+          </h1>
+          <button className="btn-secondary" onClick={() => navigate('/settings')}
+            style={{ fontSize: 13, padding: '8px 12px', flexShrink: 0 }}>
+            <Settings size={15} />{!isMobile && <> {t.settings}</>}
           </button>
-          <button className="btn-secondary" onClick={signOut} style={{ fontSize: 13 }}>
-            <LogOut size={15} /> {t.logout}
+          <button className="btn-secondary" onClick={signOut}
+            style={{ fontSize: 13, padding: '8px 12px', flexShrink: 0 }}>
+            <LogOut size={15} />{!isMobile && <> {t.logout}</>}
           </button>
         </div>
+        <p style={{ margin: 0, color: '#8B6F52', fontSize: 13, paddingLeft: 40 }}>{profile?.display_name}</p>
       </div>
 
-      {/* Venues header */}
+      {/* ── Venues header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 20, color: '#F0E6D3' }}>{t.myVenues}</h2>
-        <button className="btn-primary" onClick={() => { setShowCreate(true); setCreateError(''); }}>
-          <Plus size={16} /> {t.createVenue}
+        <h2 style={{ margin: 0, fontSize: 18, color: '#F0E6D3' }}>{t.myVenues}</h2>
+        <button className="btn-primary" onClick={() => { setShowCreate(true); setCreateError(''); }}
+          style={{ fontSize: 13, padding: '9px 16px' }}>
+          <Plus size={15} /> {t.createVenue}
         </button>
       </div>
 
-      {/* Create form */}
+      {/* ── Create form ── */}
       {showCreate && (
         <form onSubmit={createVenue} style={{
           background: '#1A1008', border: '1px solid #FF6B35',
-          borderRadius: 10, padding: 20, marginBottom: 20,
+          borderRadius: 10, padding: 16, marginBottom: 20,
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <input className="input" style={{ flex: 1 }} placeholder={t.venueName}
-              value={newName} onChange={e => setNewName(e.target.value)} autoFocus required />
-            <button className="btn-primary" type="submit" disabled={creating}>
+          <input className="input" placeholder={t.venueName}
+            value={newName} onChange={e => setNewName(e.target.value)} autoFocus required />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-primary" type="submit" disabled={creating} style={{ flex: 1 }}>
               {creating ? t.loading : t.createVenue}
             </button>
-            <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)}>{t.cancel}</button>
+            <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)} style={{ flex: 1 }}>
+              {t.cancel}
+            </button>
           </div>
           {createError && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>Error: {createError}</p>}
         </form>
@@ -114,7 +130,7 @@ export default function HostDashboard() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {venues.map(venue => (
           <VenueCard key={venue.id} venue={venue}
             onManage={() => navigate(`/host/venue/${venue.id}`)}
@@ -144,41 +160,42 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange }) {
   const isActive = venue.status === 'active';
 
   return (
-    <div style={{ background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 10, padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <h3 style={{ margin: 0, fontSize: 18, color: '#F0E6D3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {venue.name}
-            </h3>
-            <span style={{
-              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0,
-              background: isActive ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
-              color: isActive ? '#34d399' : '#f87171',
-            }}>
-              {isActive ? t.active : t.closed}
-            </span>
-          </div>
-          <div style={{ fontSize: 13, color: '#5A4535', fontFamily: 'monospace', letterSpacing: 2 }}>
-            {venue.room_code}
-          </div>
-        </div>
+    <div style={{ background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 12, padding: '16px' }}>
+      {/* Venue name + status badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#F0E6D3', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {venue.name}
+        </h3>
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0,
+          background: isActive ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
+          color: isActive ? '#34d399' : '#f87171',
+        }}>
+          {isActive ? t.active : t.closed}
+        </span>
+      </div>
 
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <button className="btn-secondary" style={{ fontSize: 12 }} onClick={onToggleQR}>
-            <QrCode size={14} /> {showQR ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-          <button className="btn-secondary" style={{ fontSize: 12 }} onClick={toggleStatus} disabled={toggling}>
-            {isActive ? t.closeRoom : t.openRoomAction}
-          </button>
-          <button className="btn-primary" style={{ fontSize: 12 }} onClick={onManage}>
-            {t.manageVenue}
-          </button>
-        </div>
+      {/* Room code */}
+      <div style={{ fontSize: 12, color: '#5A4535', fontFamily: 'monospace', letterSpacing: 2, marginBottom: 14 }}>
+        {venue.room_code}
+      </div>
+
+      {/* Action buttons — stacked on mobile */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn-secondary" style={{ padding: '9px 12px', flexShrink: 0 }} onClick={onToggleQR} title="QR Code">
+          <QrCode size={15} />
+          {showQR ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+        <button className="btn-secondary" style={{ flex: 1, fontSize: 13 }} onClick={toggleStatus} disabled={toggling}>
+          {isActive ? t.closeRoom : t.openRoomAction}
+        </button>
+        <button className="btn-primary" style={{ flex: 1, fontSize: 13 }} onClick={onManage}>
+          {t.manageVenue}
+        </button>
       </div>
 
       {showQR && (
-        <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #2A1F17', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #2A1F17', display: 'flex', justifyContent: 'center' }}>
           <VenueQRCode roomCode={venue.room_code} size={180} />
         </div>
       )}
