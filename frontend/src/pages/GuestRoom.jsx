@@ -211,32 +211,51 @@ export default function GuestRoom() {
         <CreditBalance balance={credits} />
       </div>
 
-      <div style={{ padding: '12px 16px' }}>
-        <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
-      </div>
-
-      {/* Paused — blocked entirely */}
+      {/* ── Status area — mutually exclusive states ── */}
       {venue.jukebox_paused && !venue.queue_open_when_paused ? (
-        <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-          <Pause size={52} color="#FF6B35" style={{ marginBottom: 16, opacity: 0.7 }} />
-          <h2 style={{ margin: '0 0 10px', color: '#F0E6D3', fontSize: 20 }}>Jukebox Paused</h2>
-          <p style={{ margin: 0, color: '#8B6F52', fontSize: 14 }}>
-            The host has paused song requests.<br />Check back in a moment!
-          </p>
+        /* FULLY PAUSED — hide now-playing entirely, show off message */
+        <div style={{ padding: '12px 16px 0' }}>
+          <div style={{
+            background: '#1A1008', border: '1px solid #2A1F17',
+            borderRadius: 10, padding: '18px 20px',
+            display: 'flex', alignItems: 'center', gap: 14,
+          }}>
+            <Pause size={28} color="#5A4535" style={{ flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#F0E6D3', marginBottom: 3 }}>
+                Jukebox is off
+              </div>
+              <div style={{ fontSize: 13, color: '#8B6F52' }}>
+                Song requests are closed right now. Check back soon!
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : venue.jukebox_paused && venue.queue_open_when_paused ? (
+        /* PAUSED BUT ACCEPTING QUEUE */
+        <div style={{ padding: '12px 16px 0' }}>
+          <div style={{
+            background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)',
+            borderRadius: 10, padding: '14px 16px',
+            display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#34d399',
+          }}>
+            <ListMusic size={16} style={{ flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>Queuing mode</div>
+              <div style={{ fontSize: 12, color: '#6ee7b7' }}>Add songs now — they'll play when the host starts the jukebox.</div>
+            </div>
+          </div>
         </div>
       ) : (
-        <>
-      {/* Queuing-mode banner (paused but accepting requests) */}
-      {venue.jukebox_paused && venue.queue_open_when_paused && (
-        <div style={{
-          margin: '0 16px 12px', padding: '10px 14px', borderRadius: 10,
-          background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)',
-          display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#34d399',
-        }}>
-          <ListMusic size={14} />
-          <span><strong>Queuing mode</strong> — add songs now, they'll play when the host starts the jukebox.</span>
+        /* JUKEBOX RUNNING — show live now-playing */
+        <div style={{ padding: '12px 16px 0' }}>
+          <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
         </div>
       )}
+
+      {/* Tabs & content — hidden only when fully paused */}
+      {!(venue.jukebox_paused && !venue.queue_open_when_paused) ? (
+        <>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, padding: '0 16px 12px', borderBottom: '1px solid #2A1F17' }}>
@@ -300,7 +319,7 @@ export default function GuestRoom() {
         </div>
       )}
         </>
-      )}
+      ) : null}
 
       {toast && (
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#1A1008', border: '1px solid #FF6B35', borderRadius: 999, padding: '10px 20px', fontSize: 14, fontWeight: 600, zIndex: 300, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', color: '#F0E6D3', whiteSpace: 'nowrap' }}>
