@@ -90,25 +90,36 @@ export default function GuestRoom() {
 
   // Real-time queue updates — NO filter (filtered subscriptions need special Supabase
   // publication config; check venue_id manually in the callback instead)
+  // Also runs a polling fallback every 8s in case real-time is silently broken
+  // (common on Supabase free tier if queue_items isn't in the realtime publication
+  // or guest RLS policies don't allow SELECT)
   useEffect(() => {
     if (!venue) return;
+
     const qSub = supabase
       .channel(`guest-queue-${venue.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_items' },
         (payload) => {
           const vid = payload.new?.venue_id ?? payload.old?.venue_id;
-          if (vid === venue.id) loadQueue(venue.id);
+          if (!vid || vid === venue.id) loadQueue(venue.id); // vid missing on DELETE — refresh anyway
         })
       .subscribe();
 
-    // Also subscribe to venue changes so jukebox_paused updates live
+    // Also subscribe to venue changes so jukebox_paused / queue_open_when_paused update live
     const vSub = supabase
       .channel(`guest-venue-${venue.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues' },
         (payload) => { if (payload.new?.id === venue.id) setVenue(payload.new); })
       .subscribe();
 
-    return () => { supabase.removeChannel(qSub); supabase.removeChannel(vSub); };
+    // Polling fallback — guarantees now-playing updates even if real-time is silent
+    const poll = setInterval(() => loadQueue(venue.id), 8000);
+
+    return () => {
+      supabase.removeChannel(qSub);
+      supabase.removeChannel(vSub);
+      clearInterval(poll);
+    };
   }, [venue?.id]); // eslint-disable-line
 
   // Presence: broadcast identity to host's Users tab
