@@ -109,7 +109,7 @@ export default function GuestRoom() {
 
   async function handleConfirm(playType) {
     if (!selected || !venue) return;
-    if (venue.jukebox_paused) { showToast('Jukebox is paused — try again soon'); setSelected(null); return; }
+    if (venue.jukebox_paused && !venue.queue_open_when_paused) { showToast('Jukebox is paused — try again soon'); setSelected(null); return; }
     const cost = playType === 'normal' ? 2 : quickPrice;
     if (credits < cost) { showToast(t.insufficientCredits); return; }
     const requesterName = profile?.display_name ?? 'Guest';
@@ -177,8 +177,8 @@ export default function GuestRoom() {
         <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
       </div>
 
-      {/* Paused — replace entire content area */}
-      {venue.jukebox_paused ? (
+      {/* Paused — blocked entirely */}
+      {venue.jukebox_paused && !venue.queue_open_when_paused ? (
         <div style={{ padding: '48px 24px', textAlign: 'center' }}>
           <Pause size={52} color="#FF6B35" style={{ marginBottom: 16, opacity: 0.7 }} />
           <h2 style={{ margin: '0 0 10px', color: '#F0E6D3', fontSize: 20 }}>Jukebox Paused</h2>
@@ -188,6 +188,18 @@ export default function GuestRoom() {
         </div>
       ) : (
         <>
+      {/* Queuing-mode banner (paused but accepting requests) */}
+      {venue.jukebox_paused && venue.queue_open_when_paused && (
+        <div style={{
+          margin: '0 16px 12px', padding: '10px 14px', borderRadius: 10,
+          background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)',
+          display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#34d399',
+        }}>
+          <ListMusic size={14} />
+          <span><strong>Queuing mode</strong> — add songs now, they'll play when the host starts the jukebox.</span>
+        </div>
+      )}
+
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, padding: '0 16px 12px', borderBottom: '1px solid #2A1F17' }}>
         {tabs.map(({ key, icon, label }) => (

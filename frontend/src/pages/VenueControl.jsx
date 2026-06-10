@@ -331,6 +331,39 @@ export default function VenueControl() {
   );
 }
 
+// ── Toggle component ──────────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange, label, description }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+      gap: 16, padding: '14px 16px',
+      background: '#0E0A07', border: '1px solid #2A1F17', borderRadius: 10,
+    }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: '#F0E6D3', marginBottom: 3 }}>{label}</div>
+        {description && <div style={{ fontSize: 12, color: '#8B6F52', lineHeight: 1.4 }}>{description}</div>}
+      </div>
+      {/* iOS-style pill toggle */}
+      <button
+        onClick={onChange}
+        style={{
+          flexShrink: 0, width: 48, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer',
+          background: checked ? '#FF6B35' : '#2A1F17',
+          position: 'relative', transition: 'background 0.2s',
+          padding: 0,
+        }}
+      >
+        <span style={{
+          position: 'absolute', top: 4, left: checked ? 24 : 4,
+          width: 20, height: 20, borderRadius: '50%', background: '#F0E6D3',
+          transition: 'left 0.2s', display: 'block',
+        }} />
+      </button>
+    </div>
+  );
+}
+
 // ── Vibe settings ─────────────────────────────────────────────────────────────
 
 function VibeSettings({ venue, onUpdate }) {
@@ -340,7 +373,11 @@ function VibeSettings({ venue, onUpdate }) {
   const [enabled, setEnabled] = useState(venue.vibe_mode_enabled);
   const [crossfade, setCrossfade] = useState(venue.crossfade_duration_seconds);
   const [welcome, setWelcome] = useState(venue.welcome_credits);
+  const [queueWhenPaused, setQueueWhenPaused] = useState(venue.queue_open_when_paused ?? false);
   const [saving, setSaving] = useState(false);
+
+  // Pending confirmation for queue-when-paused toggle
+  const [pendingToggle, setPendingToggle] = useState(null); // null | { newVal: bool }
 
   async function save() {
     setSaving(true);
@@ -350,16 +387,76 @@ function VibeSettings({ venue, onUpdate }) {
       vibe_mode_enabled: enabled,
       crossfade_duration_seconds: parseInt(crossfade),
       welcome_credits: parseInt(welcome),
+      queue_open_when_paused: queueWhenPaused,
     });
     setSaving(false);
   }
 
+  function requestQueueToggle() {
+    setPendingToggle({ newVal: !queueWhenPaused });
+  }
+
+  async function confirmQueueToggle() {
+    const newVal = pendingToggle.newVal;
+    setPendingToggle(null);
+    setQueueWhenPaused(newVal);
+    // Save immediately so it takes effect for guests right away
+    await onUpdate({ queue_open_when_paused: newVal });
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-        <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#FF6B35' }} />
-        <span style={{ fontWeight: 600, color: '#F0E6D3' }}>{t.enableVibe}</span>
-      </label>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 520 }}>
+
+      {/* ── Pre-event queuing ── */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#8B6F52', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+          Guest Requests
+        </div>
+        <Toggle
+          checked={queueWhenPaused}
+          onChange={requestQueueToggle}
+          label="Allow queuing while jukebox is off"
+          description="Guests can browse and queue songs even before the jukebox starts. Songs play only once you hit Start."
+        />
+      </div>
+
+      {/* Confirmation toast */}
+      {pendingToggle && (
+        <div style={{
+          background: '#1A1008', border: '1px solid #FF6B35',
+          borderRadius: 12, padding: '14px 16px',
+          display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <p style={{ margin: 0, fontSize: 13, color: '#F0E6D3', lineHeight: 1.5 }}>
+            {pendingToggle.newVal
+              ? '⚡ Guests will be able to request songs while the jukebox is paused. Their songs will queue up and play when you start the jukebox.'
+              : '🔒 Guests will NOT be able to request songs while the jukebox is paused. Requests will be blocked until you start the jukebox.'}
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-primary" style={{ flex: 1, fontSize: 13 }} onClick={confirmQueueToggle}>
+              <Check size={14} /> Confirm
+            </button>
+            <button className="btn-secondary" style={{ flex: 1, fontSize: 13 }} onClick={() => setPendingToggle(null)}>
+              <X size={14} /> Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ height: 1, background: '#2A1F17' }} />
+
+      {/* ── Vibe mode ── */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#8B6F52', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+          Vibe Mode
+        </div>
+        <Toggle
+          checked={enabled}
+          onChange={() => setEnabled(v => !v)}
+          label={t.enableVibe}
+          description="Auto-play background music from a playlist or description when the queue is empty."
+        />
+      </div>
 
       <div>
         <label style={{ fontSize: 13, color: '#8B6F52', display: 'block', marginBottom: 6 }}>{t.vibeDescription}</label>
@@ -372,19 +469,28 @@ function VibeSettings({ venue, onUpdate }) {
           placeholder="https://youtube.com/playlist?list=..." style={{ resize: 'vertical' }} />
       </div>
 
+      <div style={{ height: 1, background: '#2A1F17' }} />
+
+      {/* ── Playback & credits ── */}
       <div>
-        <label style={{ fontSize: 13, color: '#8B6F52', display: 'block', marginBottom: 6 }}>
-          {t.crossfadeDuration}: {crossfade} {t.seconds}
-        </label>
-        <input type="range" min={2} max={10} value={crossfade} onChange={e => setCrossfade(e.target.value)} style={{ width: '100%', accentColor: '#FF6B35' }} />
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#8B6F52', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+          Playback & Credits
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 13, color: '#8B6F52', display: 'block', marginBottom: 6 }}>
+              {t.crossfadeDuration}: <strong style={{ color: '#F0E6D3' }}>{crossfade}s</strong>
+            </label>
+            <input type="range" min={2} max={10} value={crossfade} onChange={e => setCrossfade(e.target.value)} style={{ width: '100%', accentColor: '#FF6B35' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, color: '#8B6F52', display: 'block', marginBottom: 6 }}>{t.welcomeCredits}</label>
+            <input className="input" type="number" min={0} max={100} value={welcome} onChange={e => setWelcome(e.target.value)} style={{ width: 120 }} />
+          </div>
+        </div>
       </div>
 
-      <div>
-        <label style={{ fontSize: 13, color: '#8B6F52', display: 'block', marginBottom: 6 }}>{t.welcomeCredits}</label>
-        <input className="input" type="number" min={0} max={100} value={welcome} onChange={e => setWelcome(e.target.value)} style={{ width: 100 }} />
-      </div>
-
-      <button className="btn-primary" onClick={save} disabled={saving} style={{ alignSelf: 'flex-start' }}>
+      <button className="btn-primary" onClick={save} disabled={saving} style={{ alignSelf: 'flex-start', padding: '10px 24px' }}>
         <Save size={15} /> {saving ? t.loading : t.save}
       </button>
     </div>
