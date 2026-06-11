@@ -25,6 +25,7 @@ import { useLang } from '../context/LangContext.jsx';
 import { api } from '../lib/api.js';
 import { supabase } from '../lib/supabase.js';
 import CrossfadePlayer from '../components/CrossfadePlayer.jsx';
+import Visualizer from '../components/Visualizer.jsx';
 import QueueDisplay from '../components/QueueDisplay.jsx';
 import NowPlaying from '../components/NowPlaying.jsx';
 import VenueQRCode from '../components/VenueQRCode.jsx';
@@ -125,16 +126,44 @@ export default function VenueControl() {
   const pendingQueue = queue.filter(i => i.status === 'pending');
   const isActive = venue.status === 'active';
 
+  const nowPlayingTitle = nowPlaying?.type === 'requested' ? nowPlaying?.item?.song_title : (vibeActive ? 'Vibe Mode' : null);
+  const nowPlayingRequester = nowPlaying?.type === 'requested' ? nowPlaying?.item?.requester_name : null;
+
   // Player panel — shared between mobile and desktop
   const playerPanel = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <CrossfadePlayer
-        ref={playerRef} queue={queue} vibeVideos={vibeVideos}
-        vibeEnabled={venue.vibe_mode_enabled} crossfadeSecs={venue.crossfade_duration_seconds}
-        jukeboxPaused={venue.jukebox_paused ?? false}
-        onMarkPlaying={handleMarkPlaying} onMarkPlayed={handleMarkPlayed}
-        onNowPlaying={setNowPlaying} onVibeActive={setVibeActive}
-      />
+      {/* Player + Visualizer stacked */}
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
+        {/* Hidden YouTube players — always in DOM */}
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0, opacity: 0, pointerEvents: 'none' }}>
+          <CrossfadePlayer
+            ref={playerRef} queue={queue} vibeVideos={vibeVideos}
+            vibeEnabled={venue.vibe_mode_enabled} crossfadeSecs={venue.crossfade_duration_seconds}
+            jukeboxPaused={venue.jukebox_paused ?? false}
+            onMarkPlaying={handleMarkPlaying} onMarkPlayed={handleMarkPlayed}
+            onNowPlaying={setNowPlaying} onVibeActive={setVibeActive}
+          />
+        </div>
+        {/* Visualizer on top — purely cosmetic */}
+        <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
+          <Visualizer
+            isPlaying={!!(nowPlaying || vibeActive) && !venue.jukebox_paused}
+            songTitle={nowPlayingTitle}
+            requester={nowPlayingRequester}
+          />
+        </div>
+      </div>
+      {/* Song info bar below visualizer */}
+      {nowPlayingTitle && !venue.jukebox_paused && (
+        <div style={{ padding: '4px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#F0E6D3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+            {nowPlayingTitle}
+          </div>
+          {nowPlayingRequester && (
+            <div style={{ fontSize: 13, color: '#8B6F52', flexShrink: 0 }}>by {nowPlayingRequester}</div>
+          )}
+        </div>
+      )}
       <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
       <div style={{ display: 'flex', gap: 10 }}>
         <button
@@ -158,8 +187,9 @@ export default function VenueControl() {
         )}
       </div>
       {venue.jukebox_paused && (
-        <div style={{ background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.3)', borderRadius: 10, padding: '10px 16px', fontSize: 13, color: '#FF6B35', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <Pause size={14} /> Guests cannot request songs while paused
+        <div style={{ background: '#2A0808', border: '1px solid #FF6B35', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
+          <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 13, color: '#C89B6E' }}>Guests cannot request songs while paused</span>
         </div>
       )}
     </div>

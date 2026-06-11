@@ -1,134 +1,160 @@
-/* ── Noteblock Design System ─────────────────────────────────────── */
-
-:root { color-scheme: dark; }
-
-[data-theme="dark"] {
-  --bg: #0E0A07; --page: #120C06; --card: #1A1008; --border: #2A1F17;
-  --text: #F0E6D3; --text2: #8B6F52; --muted: #5A4535;
-}
-[data-theme="light"] {
-  --bg: #FAF5EF; --page: #F2EAE0; --card: #FFF8F2; --border: #E8D9C8;
-  --text: #1A0E06; --text2: #7A5C42; --muted: #B89880;
-}
-
 :root {
-  /* Backgrounds */
-  --bg:        #120C06;
-  --surface:   #1A1008;
-  --border:    #2A1F17;
-
-  /* Brand & Accents */
-  --accent:    #FF6B35;
-  --accent2:   #C89B6E;
-  --logo:      #6B4226;
-  --normal-play: #3D2B1A;
-
-  /* Text */
-  --text:       #F0E6D3;
-  --text-muted: #8B6F52;
-  --text-faint: #5A4535;
+  --bg-app: #0E0A07;
+  --bg-page: #120C06;
+  --bg-card: #1A1008;
+  --border: #2A1F17;
+  --accent: #FF6B35;
+  --credits: #C89B6E;
+  --logo-bg: #6B4226;
+  --btn-normal: #3D2B1A;
+  --text-primary: #F0E6D3;
+  --text-secondary: #8B6F52;
+  --text-muted: #5A4535;
 }
 
-*, *::before, *::after {
-  box-sizing: border-box;
+[data-theme="light"] {
+  --bg-app: #FAF5EF;
+  --bg-page: #F2EAE0;
+  --bg-card: #FFF8F2;
+  --border: #E8D9C8;
+  --text-primary: #1A0E06;
+  --text-secondary: #7A5C42;
+  --text-muted: #B89880;
 }
 
-html, body, #root {
-  height: 100%;
-  margin: 0;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root { height: 100%; }
 
 body {
-  background: #0E0A07;
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Shared utility classes */
-
 .center-screen {
-  min-height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px 16px;
-  background: #0E0A07;
+  min-height: 100svh;
 }
+
+input, textarea, select {
+  font-family: inherit;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 12px 16px;
+  font-size: 15px;
+  outline: none;
+  width: 100%;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+}
+
+button { font-family: inherit; cursor: pointer; border: none; }
 
 .btn-primary {
   background: var(--accent);
-  color: #F0E6D3;
-  border: none;
-  border-radius: 7px;
-  padding: 10px 20px;
-  font-size: 14px;
+  color: #0E0A07;
   font-weight: 700;
-  cursor: pointer;
-  transition: opacity 0.15s;
-  font-family: inherit;
+  font-size: 15px;
+  height: 52px;
+  border-radius: 8px;
+  box-shadow: 0 0 14px rgba(255,107,53,0.4);
+  padding: 0 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
+  transition: opacity 0.15s;
 }
-
-.btn-primary:hover:not(:disabled) {
-  opacity: 0.88;
-}
-
-.btn-primary:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
+.btn-primary:hover { opacity: 0.88; }
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn-secondary {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 10px 20px;
-  font-size: 14px;
+  background: var(--btn-normal);
+  color: var(--text-primary);
   font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.15s;
-  font-family: inherit;
+  font-size: 14px;
+  height: 44px;
+  border-radius: 8px;
+  padding: 0 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
+  transition: background 0.15s;
 }
+.btn-secondary:hover { background: var(--border); }
 
-.btn-secondary:hover {
-  border-color: var(--accent);
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 14px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s;
 }
+.btn-ghost:hover { background: var(--bg-card); }
 
 .input {
-  background: var(--surface);
-  color: var(--text);
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 12px 14px;
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 12px 16px;
   font-size: 15px;
-  font-family: inherit;
   outline: none;
   width: 100%;
+  font-family: inherit;
   transition: border-color 0.15s;
 }
+.input:focus { border-color: var(--accent); }
 
-.input:focus {
-  border-color: var(--accent);
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+/* Animated bars (now playing indicator) */
+@keyframes bar1 { 0%,100%{height:40%} 50%{height:100%} }
+@keyframes bar2 { 0%,100%{height:70%} 50%{height:30%} }
+@keyframes bar3 { 0%,100%{height:55%} 50%{height:90%} }
+@keyframes bar4 { 0%,100%{height:85%} 50%{height:40%} }
 
-/* Music bars animation */
-@keyframes bar1 { from { height: 6px; } to { height: 18px; } }
-@keyframes bar2 { from { height: 14px; } to { height: 4px; } }
-@keyframes bar3 { from { height: 10px; } to { height: 20px; } }
-@keyframes bar4 { from { height: 18px; } to { height: 6px; } }
+.playing-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 18px;
+}
+.playing-bars span {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+.playing-bars span:nth-child(1) { animation: bar1 0.8s ease-in-out infinite; }
+.playing-bars span:nth-child(2) { animation: bar2 0.7s ease-in-out infinite 0.1s; }
+.playing-bars span:nth-child(3) { animation: bar3 0.9s ease-in-out infinite 0.05s; }
+.playing-bars span:nth-child(4) { animation: bar4 0.75s ease-in-out infinite 0.15s; }
+.playing-bars.paused span { animation-play-state: paused; height: 40% !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-app); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
