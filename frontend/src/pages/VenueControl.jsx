@@ -177,7 +177,7 @@ export default function VenueControl() {
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
                 <Radio size={12} color="var(--text-secondary)" />
-                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Vibe Mode</span>
+                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>{t.vibeModeLabel}</span>
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {nowPlayingTitle ?? <span style={{ color: 'var(--text-muted)' }}>Loading…</span>}
@@ -206,7 +206,7 @@ export default function VenueControl() {
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
           }}
         >
-          {venue.jukebox_paused ? <><Play size={16} /> Resume</> : <><Pause size={16} /> Pause</>}
+          {venue.jukebox_paused ? <><Play size={16} /> {t.resume}</> : <><Pause size={16} /> {t.pause}</>}
         </button>
         {!nowPlaying && !venue.jukebox_paused && (
           <button
@@ -219,7 +219,7 @@ export default function VenueControl() {
               boxShadow: '0 0 14px rgba(34,197,94,0.35)',
             }}
           >
-            <Play size={16} /> Start
+            <Play size={16} /> {t.start}
           </button>
         )}
         {nowPlaying && !venue.jukebox_paused && (
@@ -241,7 +241,7 @@ export default function VenueControl() {
       {venue.jukebox_paused && (
         <div style={{ background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.4)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
           <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: '#FF6B35', fontWeight: 600 }}>Guests cannot request songs while paused</span>
+          <span style={{ fontSize: 13, color: '#FF6B35', fontWeight: 600 }}>{t.guestsCannotRequest}</span>
         </div>
       )}
     </div>
@@ -297,7 +297,7 @@ export default function VenueControl() {
     const mobileTabs = [
       { key: 'player', icon: <Music size={20} />,     label: 'Player' },
       { key: 'queue',  icon: <ListMusic size={20} />, label: `Queue${pendingQueue.length ? ` (${pendingQueue.length})` : ''}` },
-      { key: 'users',  icon: <Users size={20} />,     label: 'Users' },
+      { key: 'users',  icon: <Users size={20} />,     label: t.users },
       { key: 'manage', icon: <Settings2 size={20} />, label: 'Manage' },
       { key: 'qr',     icon: <QrCode size={20} />,    label: 'QR' },
     ];
@@ -381,7 +381,7 @@ export default function VenueControl() {
     { key: 'queue',  icon: <ListMusic size={14} />, label: `${t.queue} (${pendingQueue.length})` },
     { key: 'vibe',   icon: <Radio size={14} />,    label: t.vibe },
     { key: 'ban',    icon: <Ban size={14} />,       label: t.bannedSongs },
-    { key: 'users',  icon: <Users size={14} />,     label: 'Users' },
+    { key: 'users',  icon: <Users size={14} />,     label: t.users },
     { key: 'stats',  icon: <BarChart2 size={14} />, label: t.stats },
     { key: 'qr',     icon: <QrCode size={14} />,    label: 'QR' },
   ];
@@ -499,13 +499,13 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
       {/* ── Pre-event queuing ── */}
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-          Guest Requests
+          {t.guestRequests}
         </div>
         <Toggle
           checked={queueWhenPaused}
           onChange={requestQueueToggle}
-          label="Allow queuing while jukebox is off"
-          description="Guests can browse and queue songs even before the jukebox starts. Songs play only once you hit Start."
+          label={t.allowQueueWhenPaused}
+          description={t.allowQueueWhenPausedDesc}
         />
       </div>
 
@@ -537,7 +537,7 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
       {/* ── Vibe mode ── */}
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-          Vibe Mode
+          {t.vibeModeLabel}
         </div>
         <Toggle
           checked={enabled}
@@ -571,7 +571,7 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF6B35'; e.currentTarget.style.color = 'var(--text-primary)'; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
         >
-          <RefreshCw size={14} /> Reset Vibe History ({vibePlayedCount})
+          <RefreshCw size={14} /> {t.resetVibeHistory} ({vibePlayedCount})
         </button>
       )}
 
@@ -580,7 +580,7 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
       {/* ── Playback & credits ── */}
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-          Playback & Credits
+          {t.playbackCredits}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
@@ -641,7 +641,7 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
       {!banned.length && (
         <div style={{ textAlign: 'center', padding: '20px 0' }}>
           <ShieldOff size={40} color="var(--border)" style={{ marginBottom: 8 }} />
-          <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>No songs banned</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t.noSongsBanned}</div>
         </div>
       )}
       {banned.map(b => (
@@ -823,7 +823,7 @@ function UsersPanel({ venueId, token }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <h3 style={{ margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Users size={18} color="#FF6B35" /> Room Users
+          <Users size={18} color="#FF6B35" /> {t.roomUsers}
           {onlineUsers.length > 0 && (
             <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
               {onlineUsers.length} online
