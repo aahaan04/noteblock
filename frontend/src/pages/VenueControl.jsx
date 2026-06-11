@@ -44,6 +44,7 @@ export default function VenueControl() {
   const [vibeVideos, setVibeVideos] = useState([]);
   const [nowPlaying, setNowPlaying] = useState(null);
   const [vibeActive, setVibeActive] = useState(false);
+  const [vibePlayedIds, setVibePlayedIds] = useState([]); // IDs of vibe videos already played this session
   const [tab, setTab] = useState(() => window.innerWidth < 768 ? 'player' : 'queue');
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +59,8 @@ export default function VenueControl() {
     try {
       const v = await api.venues.get(id, token);
       setVenue(v); setLoading(false);
+      // Restore played vibe IDs from Supabase (persists across browser sessions)
+      if (v.vibe_played_video_ids?.length) setVibePlayedIds(v.vibe_played_video_ids);
       if (v.vibe_mode_enabled) loadVibeVideos(v);
     } catch { navigate('/host/dashboard'); }
   }
@@ -103,6 +106,16 @@ export default function VenueControl() {
     await api.queue.updateStatus(id, itemId, 'played', token).catch(() => {});
   }, [id, token]);
 
+  async function handleVibePlayed(videoId) {
+    setVibePlayedIds(prev => {
+      if (prev.includes(videoId)) return prev;
+      const next = [...prev, videoId];
+      // Persist to Supabase in background — don't await to avoid blocking playback
+      api.venues.update(id, { vibe_played_video_ids: next }, token).catch(() => {});
+      return next;
+    });
+  }
+
   function handleSkip() {
     if (skipping) return;
     setSkipping(true);
@@ -142,8 +155,10 @@ export default function VenueControl() {
             ref={playerRef} queue={queue} vibeVideos={vibeVideos}
             vibeEnabled={venue.vibe_mode_enabled} crossfadeSecs={venue.crossfade_duration_seconds}
             jukeboxPaused={venue.jukebox_paused ?? false}
+            vibePlayedIds={vibePlayedIds}
             onMarkPlaying={handleMarkPlaying} onMarkPlayed={handleMarkPlayed}
             onNowPlaying={setNowPlaying} onVibeActive={setVibeActive}
+            onVibePlayed={handleVibePlayed}
           />
         </div>
         {/* Visualizer on top — purely cosmetic */}
@@ -236,7 +251,7 @@ export default function VenueControl() {
   const tabContent = (
     <>
       {tab === 'queue'  && <QueueDisplay items={queue} isHost onRemove={handleRemove} onSkip={handleSkip} nowPlaying={nowPlaying} />}
-      {tab === 'vibe'   && <VibeSettings venue={venue} onUpdate={handleVenueUpdate} />}
+      {tab === 'vibe'   && <VibeSettings venue={venue} onUpdate={handleVenueUpdate} vibePlayedCount={vibePlayedIds.length} onResetVibeHistory={() => { setVibePlayedIds([]); handleVenueUpdate({ vibe_played_video_ids: [] }); }} />}
       {tab === 'ban'    && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />}
       {tab === 'users'  && <UsersPanel venueId={id} token={token} />}
       {tab === 'stats'  && <StatsPanel stats={stats} />}
@@ -440,7 +455,7 @@ function Toggle({ checked, onChange, label, description }) {
 
 // ── Vibe settings ─────────────────────────────────────────────────────────────
 
-function VibeSettings({ venue, onUpdate }) {
+function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory }) {
   const { t } = useLang();
   const [desc, setDesc] = useState(venue.vibe_description ?? '');
   const [urls, setUrls] = useState((venue.vibe_playlist_urls ?? []).join('\n'));
@@ -564,9 +579,26 @@ function VibeSettings({ venue, onUpdate }) {
         </div>
       </div>
 
-      <button className="btn-primary" onClick={save} disabled={saving} style={{ alignSelf: 'flex-start', padding: '10px 24px' }}>
-        <Save size={15} /> {saving ? t.loading : t.save}
-      </button>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="btn-primary" onClick={save} disabled={saving} style={{ padding: '10px 24px' }}>
+          <Save size={15} /> {saving ? t.loading : t.save}
+        </button>
+        {vibePlayedCount > 0 && (
+          <button
+            onClick={onResetVibeHistory}
+            style={{
+              background: 'none', border: '1px solid #2A1F17', borderRadius: 8,
+              color: '#8B6F52', cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: 13, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'border-color 0.15s, color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF6B35'; e.currentTarget.style.color = '#F0E6D3'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A1F17'; e.currentTarget.style.color = '#8B6F52'; }}
+          >
+            <RefreshCw size={14} /> Reset Vibe History ({vibePlayedCount})
+          </button>
+        )}
+      </div>
     </div>
   );
 }

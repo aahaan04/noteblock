@@ -191,27 +191,27 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobi
       {/* Action buttons — stacked on mobile, side-by-side on desktop */}
       {isMobile ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button className="btn-primary" style={{ width: '100%', fontSize: 14, boxShadow: '0 0 14px rgba(255,107,53,0.35)' }} onClick={onManage}>
+          <button className="btn-primary" style={{ width: '100%', height: 52, fontSize: 14, boxShadow: '0 0 14px rgba(255,107,53,0.35)' }} onClick={onManage}>
             {t.manageVenue}
           </button>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn-secondary" style={{ flex: 1, fontSize: 13 }} onClick={toggleStatus} disabled={toggling}>
+            <button className="btn-secondary" style={{ flex: 1, height: 52, fontSize: 13 }} onClick={toggleStatus} disabled={toggling}>
               {isActive ? t.closeRoom : t.openRoomAction}
             </button>
-            <button className="btn-secondary" style={{ padding: '9px 12px', flexShrink: 0 }} onClick={onToggleQR} title="QR Code">
+            <button className="btn-secondary" style={{ width: 52, height: 52, flexShrink: 0, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onToggleQR} title="QR Code">
               <QrCode size={15} />
             </button>
           </div>
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-secondary" style={{ padding: '9px 12px', flexShrink: 0 }} onClick={onToggleQR} title="QR Code">
+          <button className="btn-secondary" style={{ width: 52, height: 52, flexShrink: 0, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onToggleQR} title="QR Code">
             <QrCode size={15} />
           </button>
-          <button className="btn-secondary" style={{ flex: 1, fontSize: 13 }} onClick={toggleStatus} disabled={toggling}>
+          <button className="btn-secondary" style={{ flex: 1, height: 52, fontSize: 13 }} onClick={toggleStatus} disabled={toggling}>
             {isActive ? t.closeRoom : t.openRoomAction}
           </button>
-          <button className="btn-primary" style={{ flex: 1, fontSize: 13, boxShadow: '0 0 14px rgba(255,107,53,0.35)' }} onClick={onManage}>
+          <button className="btn-primary" style={{ flex: 1, height: 52, fontSize: 13, boxShadow: '0 0 14px rgba(255,107,53,0.35)' }} onClick={onManage}>
             {t.manageVenue}
           </button>
         </div>

@@ -71,7 +71,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     'name', 'status', 'welcome_credits', 'crossfade_duration_seconds',
     'vibe_description', 'vibe_playlist_urls', 'vibe_mode_enabled',
     'vibe_current_video_index', 'vibe_current_position_seconds',
-    'jukebox_paused', 'queue_open_when_paused',
+    'jukebox_paused', 'queue_open_when_paused', 'vibe_played_video_ids',
   ];
   const updates = {};
   for (const key of allowed) {
