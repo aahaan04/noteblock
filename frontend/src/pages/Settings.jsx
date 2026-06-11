@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, LogOut, Sun, Moon } from 'lucide-react';
+import { LogOut, Sun, Moon } from 'lucide-react';
 import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
@@ -34,7 +34,7 @@ export default function Settings() {
   return (
     <div style={{ maxWidth: 400, margin: '0 auto', padding: '32px 16px', minHeight: '100vh', background: 'var(--bg-app)' }}>
       <button onClick={goBack} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', marginBottom: 24, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <ArrowLeft size={16} /> {t.back}
+        {t.back}
       </button>
 
       <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 28, color: 'var(--text-primary)' }}>{t.settingsTitle}</h1>
