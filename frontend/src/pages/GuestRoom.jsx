@@ -179,7 +179,8 @@ export default function GuestRoom() {
       setCredits(newBalance);
       refreshProfile();
       setSessionHistory(prev => [{ ...selected, playType, credits: result.credits_charged }, ...prev]);
-      showToast(t.songAddedToQueue);
+      const playLabel = playType === 'quick' ? '⚡ Quick Play' : '▶ Normal Play';
+      showToast(`${playLabel} — "${decode(selected.title)}" added to queue!`, 4000);
       setSelected(null);
       loadQueue(venue.id);
     } catch (err) {
