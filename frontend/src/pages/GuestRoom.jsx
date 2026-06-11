@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Search, ListMusic, Clock, Music, Pause, Settings, X, Sun, Moon, LogOut } from 'lucide-react';
+import { Search, ListMusic, Clock, Music, Pause, Settings, X, Sun, Moon, LogOut, Check } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -16,6 +16,7 @@ import CreditBalance from '../components/CreditBalance.jsx';
 const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
 const HISTORY_MAX = 100;
+const CONFETTI_COLORS = ['#FF6B35','#FFD700','#34d399','#60a5fa','#f472b6','#a78bfa','#FF4444','#FFCC00'];
 
 function historyKey(venueId, profileId) {
   return `nb_history_${venueId}_${profileId ?? 'anon'}`;
@@ -28,15 +29,170 @@ function saveStoredHistory(venueId, profileId, entries) {
   try { localStorage.setItem(historyKey(venueId, profileId), JSON.stringify(entries.slice(0, HISTORY_MAX))); }
   catch {}
 }
-
 function formatHistoryDate(ts) {
   if (!ts) return '';
   const d = new Date(ts);
-  const now = new Date();
-  const diffDays = Math.floor((now - d) / 86400000);
+  const diffDays = Math.floor((Date.now() - d) / 86400000);
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// ── Confetti popup shown when a song is successfully added ──────────────────
+function SongAddedPopup({ popup, onDismiss }) {
+  const particles = useMemo(() => {
+    const N = 32;
+    return Array.from({ length: N }, (_, i) => ({
+      id: i,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      left: `${2 + ((i / N) * 96).toFixed(1)}%`,
+      delay: `${(i % 8) * 55}ms`,
+      dur: `${520 + (i % 5) * 110}ms`,
+      w: 5 + (i % 3) * 3,
+      h: 4 + (i % 2) * 4,
+      startRot: i * 41,
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (!popup) return;
+    const t = setTimeout(onDismiss, 3500);
+    return () => clearTimeout(t);
+  }, [popup]); // eslint-disable-line
+
+  if (!popup) return null;
+
+  const isQuick = popup.playType === 'quick';
+
+  return (
+    <>
+      {/* CSS keyframes */}
+      <style>{`
+        @keyframes cfFall {
+          0%   { opacity: 1; transform: translateY(-6px) rotate(0deg) scaleX(1); }
+          45%  { opacity: 1; }
+          100% { opacity: 0; transform: translateY(150px) rotate(600deg) scaleX(-1); }
+        }
+        @keyframes popIn {
+          0%   { opacity: 0; transform: scale(0.7) translateY(20px); }
+          60%  { transform: scale(1.04) translateY(-4px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes checkPop {
+          0%   { transform: scale(0); opacity: 0; }
+          70%  { transform: scale(1.2); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes drainBar {
+          0%   { width: 100%; }
+          100% { width: 0%; }
+        }
+      `}</style>
+
+      {/* Overlay */}
+      <div
+        onClick={onDismiss}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 500,
+          background: 'rgba(0,0,0,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 24,
+        }}
+      >
+        {/* Card */}
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'relative', overflow: 'hidden',
+            background: 'var(--bg-page)', border: '1px solid var(--border)',
+            borderRadius: 20, padding: '32px 24px 24px',
+            width: '100%', maxWidth: 320, textAlign: 'center',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+            animation: 'popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards',
+          }}
+        >
+          {/* Confetti particles — clipped inside card */}
+          {particles.map(p => (
+            <div key={p.id} style={{
+              position: 'absolute',
+              left: p.left, top: 0,
+              width: p.w, height: p.h,
+              background: p.color,
+              borderRadius: 2,
+              animation: `cfFall ${p.dur} ${p.delay} ease-out forwards`,
+              transform: `rotate(${p.startRot}deg)`,
+              pointerEvents: 'none',
+            }} />
+          ))}
+
+          {/* Dismiss button */}
+          <button
+            onClick={onDismiss}
+            style={{
+              position: 'absolute', top: 12, right: 12,
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: 6, color: 'var(--text-muted)',
+              cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center',
+            }}
+          >
+            <X size={14} />
+          </button>
+
+          {/* Check icon */}
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            background: 'rgba(52,211,153,0.12)', border: '2px solid rgba(52,211,153,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px',
+            animation: 'checkPop 0.4s 0.15s cubic-bezier(0.34,1.56,0.64,1) both',
+          }}>
+            <Check size={28} color="#34d399" strokeWidth={3} />
+          </div>
+
+          {/* Heading */}
+          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>
+            Song Queued! 🎶
+          </div>
+
+          {/* Play type badge */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            background: isQuick ? 'rgba(255,107,53,0.12)' : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${isQuick ? 'rgba(255,107,53,0.35)' : 'var(--border)'}`,
+            borderRadius: 999, padding: '4px 12px', marginBottom: 14,
+            fontSize: 12, fontWeight: 700,
+            color: isQuick ? '#FF6B35' : 'var(--text-secondary)',
+          }}>
+            {isQuick ? '⚡ Quick Play' : '▶ Normal Play'}
+          </div>
+
+          {/* Song title */}
+          <div style={{
+            fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)',
+            padding: '10px 14px',
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: 10,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {popup.title}
+          </div>
+
+          {/* Credits spent */}
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
+            {popup.credits} credit{popup.credits !== 1 ? 's' : ''} spent
+          </div>
+
+          {/* Auto-dismiss progress bar */}
+          <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginTop: 18, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', background: '#FF6B35', borderRadius: 2,
+              animation: 'drainBar 3.5s linear forwards',
+            }} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }
 
 export default function GuestRoom() {
@@ -55,6 +211,7 @@ export default function GuestRoom() {
   const [sessionHistory, setSessionHistory] = useState([]);
   const [tab, setTab] = useState('search');
   const [toast, setToast] = useState('');
+  const [songPopup, setSongPopup] = useState(null); // { title, playType, credits }
   const [showSettings, setShowSettings] = useState(false);
   const [settingsName, setSettingsName] = useState(profile?.display_name ?? '');
   const [nameSaved, setNameSaved] = useState(false);
@@ -85,7 +242,7 @@ export default function GuestRoom() {
     if (profile?.display_name) setSettingsName(profile.display_name);
   }, [profile?.display_name]);
 
-  // Real-time: watch our own users row for credit gifts from the host
+  // Real-time: watch for credit gifts
   useEffect(() => {
     if (!profile?.id) return;
     const sub = supabase
@@ -98,7 +255,7 @@ export default function GuestRoom() {
         const prev = prevCreditsRef.current ?? 0;
         const diff = newBal - prev;
         if (diff > 0) {
-          showToast(`You have been gifted ${diff} credit${diff !== 1 ? 's' : ''}! You now have ${newBal}.`, 5000);
+          showToast(`You've been gifted ${diff} credit${diff !== 1 ? 's' : ''}! Balance: ${newBal}.`, 5000);
         }
         prevCreditsRef.current = newBal;
         setCredits(newBal);
@@ -137,10 +294,9 @@ export default function GuestRoom() {
     setBanned(b);
   }
 
-  // Real-time + polling fallback
+  // Real-time + 5s polling fallback
   useEffect(() => {
     if (!venue) return;
-
     const qSub = supabase
       .channel(`guest-queue-${venue.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_items' },
@@ -149,27 +305,16 @@ export default function GuestRoom() {
           if (!vid || vid === venue.id) loadQueue(venue.id);
         })
       .subscribe();
-
     const vSub = supabase
       .channel(`guest-venue-${venue.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues' },
         (payload) => { if (payload.new?.id === venue.id) setVenue(payload.new); })
       .subscribe();
-
-    // Polling fallback every 5s — guarantees fresh now-playing + paused state
-    const poll = setInterval(() => {
-      loadQueue(venue.id);
-      refreshVenue();
-    }, 5000);
-
-    return () => {
-      supabase.removeChannel(qSub);
-      supabase.removeChannel(vSub);
-      clearInterval(poll);
-    };
+    const poll = setInterval(() => { loadQueue(venue.id); refreshVenue(); }, 5000);
+    return () => { supabase.removeChannel(qSub); supabase.removeChannel(vSub); clearInterval(poll); };
   }, [venue?.id]); // eslint-disable-line
 
-  // Presence: broadcast identity to host's Users tab
+  // Presence
   useEffect(() => {
     if (!venue || !profile) return;
     const ch = supabase.channel(`presence-${venue.id}`);
@@ -208,14 +353,17 @@ export default function GuestRoom() {
       prevCreditsRef.current = newBalance;
       setCredits(newBalance);
       refreshProfile();
+
+      // Persist history
       const entry = { ...selected, playType, credits: result.credits_charged, timestamp: Date.now() };
       setSessionHistory(prev => {
         const updated = [entry, ...prev];
         saveStoredHistory(venue.id, profile?.id, updated);
         return updated;
       });
-      const playLabel = playType === 'quick' ? '⚡ Quick Play' : '▶ Normal Play';
-      showToast(`${playLabel} — "${decode(selected.title)}" added to queue!`, 4000);
+
+      // Show confetti popup instead of toast
+      setSongPopup({ title: decode(selected.title), playType, credits: result.credits_charged });
       setSelected(null);
       loadQueue(venue.id);
     } catch (err) {
@@ -242,7 +390,7 @@ export default function GuestRoom() {
     setTimeout(() => setToast(''), duration);
   }
 
-  // Stale-playing guard: ignore 'playing' items stuck for > 15 min
+  // Stale-playing guard: ignore items stuck > 15 min
   const nowPlayingItem = queue.find(i => {
     if (i.status !== 'playing') return false;
     if (i.updated_at) {
@@ -258,13 +406,14 @@ export default function GuestRoom() {
   if (!venue) return <div className="center-screen"><p style={{ color: 'var(--text-secondary)' }}>{t.loading}</p></div>;
 
   const tabs = [
-    { key: 'search',  icon: <Search size={14} />,   label: t.searchSongs.replace('…','') },
+    { key: 'search',  icon: <Search size={14} />,   label: t.searchSongs.replace('…','').replace('…','') },
     { key: 'queue',   icon: <ListMusic size={14} />, label: `${t.queue} (${queue.filter(i => i.status === 'pending').length})` },
     { key: 'history', icon: <Clock size={14} />,     label: 'History' },
   ];
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 0 80px', minHeight: '100vh', background: 'var(--bg-app)' }}>
+
       {/* ── Sticky header ── */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 50,
@@ -283,7 +432,6 @@ export default function GuestRoom() {
           )}
         </div>
         <CreditBalance balance={credits} />
-        {/* Settings button */}
         <button
           onClick={() => setShowSettings(true)}
           style={{
@@ -302,11 +450,7 @@ export default function GuestRoom() {
       {/* ── Status area ── */}
       {venue.jukebox_paused && !venue.queue_open_when_paused ? (
         <div style={{ padding: '12px 16px 0' }}>
-          <div style={{
-            background: 'var(--bg-card)', border: '1px solid var(--border)',
-            borderRadius: 10, padding: '12px 16px',
-            display: 'flex', alignItems: 'center', gap: 14,
-          }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
             <Pause size={24} color="var(--text-muted)" style={{ flexShrink: 0 }} />
             <div>
               <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.jukeboxOff}</div>
@@ -316,11 +460,7 @@ export default function GuestRoom() {
         </div>
       ) : venue.jukebox_paused && venue.queue_open_when_paused ? (
         <div style={{ padding: '12px 16px 0' }}>
-          <div style={{
-            background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)',
-            borderRadius: 10, padding: '12px 16px',
-            display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#34d399',
-          }}>
+          <div style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#34d399' }}>
             <ListMusic size={16} style={{ flexShrink: 0 }} />
             <div>
               <div style={{ fontWeight: 700, marginBottom: 2 }}>{t.queuingMode}</div>
@@ -358,10 +498,7 @@ export default function GuestRoom() {
                 {sessionHistory.length > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
                     <button
-                      onClick={() => {
-                        setSessionHistory([]);
-                        if (venue?.id) saveStoredHistory(venue.id, profile?.id, []);
-                      }}
+                      onClick={() => { setSessionHistory([]); if (venue?.id) saveStoredHistory(venue.id, profile?.id, []); }}
                       style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', padding: '5px 12px' }}
                     >
                       {t.clearHistory}
@@ -373,10 +510,7 @@ export default function GuestRoom() {
                     <p style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: 24 }}>{t.noHistory}</p>
                   )}
                   {sessionHistory.map((s, i) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px',
-                    }}>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' }}>
                       {s.thumbnail && <img src={s.thumbnail} alt="" style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(s.title)}</div>
@@ -422,6 +556,9 @@ export default function GuestRoom() {
         </div>
       )}
 
+      {/* ── Confetti popup (song queued) ── */}
+      <SongAddedPopup popup={songPopup} onDismiss={() => setSongPopup(null)} />
+
       {/* ── Settings sheet ── */}
       {showSettings && (
         <div
@@ -429,10 +566,7 @@ export default function GuestRoom() {
           onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}
         >
           <div style={{ background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: '16px 16px 0 0', padding: '20px 20px 32px', width: '100%', maxWidth: 520, maxHeight: '85vh', overflowY: 'auto' }}>
-            {/* Sheet handle */}
             <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border)', margin: '0 auto 20px' }} />
-
-            {/* Title row */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{t.settingsTitle}</h2>
               <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', padding: 4 }}>
@@ -440,27 +574,16 @@ export default function GuestRoom() {
               </button>
             </div>
 
-            {/* Dark / Light toggle */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '12px 14px', marginBottom: 16,
-              background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10,
-            }}>
+            {/* Dark / Light */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', marginBottom: 16, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {dark ? <Moon size={16} color="var(--credits)" /> : <Sun size={16} color="#FF6B35" />}
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 1 }}>
-                    {dark ? t.darkMode : t.lightMode}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    {dark ? t.switchToLight : t.switchToDark}
-                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 1 }}>{dark ? t.darkMode : t.lightMode}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{dark ? t.switchToLight : t.switchToDark}</div>
                 </div>
               </div>
-              <button
-                onClick={toggle}
-                style={{ flexShrink: 0, width: 48, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer', background: dark ? '#FF6B35' : 'var(--border)', position: 'relative', padding: 0 }}
-              >
+              <button onClick={toggle} style={{ flexShrink: 0, width: 48, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer', background: dark ? '#FF6B35' : 'var(--border)', position: 'relative', padding: 0 }}>
                 <span style={{ position: 'absolute', top: 4, left: dark ? 24 : 4, width: 20, height: 20, borderRadius: '50%', background: 'var(--text-primary)', transition: 'left 0.2s', display: 'block' }} />
               </button>
             </div>
@@ -474,9 +597,7 @@ export default function GuestRoom() {
                     flex: 1, padding: '10px 4px', borderRadius: 7, border: 'none', cursor: 'pointer',
                     fontWeight: 600, fontSize: 14, fontFamily: 'inherit',
                     background: lang === code ? '#FF6B35' : 'var(--bg-card)',
-                    color: 'var(--text-primary)',
-                    opacity: lang === code ? 1 : 0.6,
-                    transition: 'opacity 0.15s',
+                    color: 'var(--text-primary)', opacity: lang === code ? 1 : 0.6,
                   }}>
                     {label}
                   </button>
@@ -484,17 +605,12 @@ export default function GuestRoom() {
               </div>
             </div>
 
-            {/* Display name (logged-in only) */}
+            {/* Display name */}
             {profile && (
               <form onSubmit={handleSaveName} style={{ marginBottom: 18 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{t.displayName}</label>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    className="input"
-                    value={settingsName}
-                    onChange={e => setSettingsName(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
+                  <input className="input" value={settingsName} onChange={e => setSettingsName(e.target.value)} style={{ flex: 1 }} />
                   <button type="submit" className="btn-primary" style={{ padding: '0 18px', height: 44, whiteSpace: 'nowrap' }}>
                     {nameSaved ? t.saved : t.save}
                   </button>
@@ -502,34 +618,27 @@ export default function GuestRoom() {
               </form>
             )}
 
-            {/* Divider */}
             {profile && <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 16px' }} />}
 
-            {/* Log out */}
+            {/* Logout */}
             {profile && (
               <button
                 onClick={() => { signOut(); setShowSettings(false); }}
-                style={{
-                  width: '100%', padding: '12px', borderRadius: 8,
-                  border: '1px solid var(--border)', background: 'none',
-                  color: '#C0392B', cursor: 'pointer', fontWeight: 700, fontSize: 14,
-                  fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}
+                style={{ width: '100%', padding: '12px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', color: '#C0392B', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = '#C0392B'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
               >
                 <LogOut size={16} /> {t.logout}
               </button>
             )}
-
             <VersionFooter />
           </div>
         </div>
       )}
 
-      {/* ── Toast ── */}
+      {/* ── Error / info toasts (NOT for song-added — that uses confetti popup) ── */}
       {toast && (
-        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: 'var(--bg-card)', border: '1px solid #FF6B35', borderRadius: 999, padding: '10px 20px', fontSize: 14, fontWeight: 600, zIndex: 400, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: 'var(--bg-card)', border: '1px solid #FF6B35', borderRadius: 999, padding: '10px 20px', fontSize: 14, fontWeight: 600, zIndex: 400, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', color: 'var(--text-primary)', whiteSpace: 'nowrap', maxWidth: 'calc(100vw - 32px)' }}>
           {toast}
         </div>
       )}
