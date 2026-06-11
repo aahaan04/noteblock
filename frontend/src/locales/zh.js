@@ -113,6 +113,14 @@ export default {
   roomUsers: '房间用户',
   banConfirm: '将此歌曲从该场地封禁？',
 
+  // Guest room
+  clearHistory: '清除历史',
+  noHistory: '暂无请求记录',
+  jukeboxOff: '点唱机已关闭',
+  jukeboxOffMsg: '歌曲请求目前已关闭，请稍后再来！',
+  queuingMode: '排队模式',
+  queuingModeMsg: '现在添加歌曲 — 主持人开始后将会播放。',
+
   // Common
   loading: '加载中…',
   error: '出现错误',

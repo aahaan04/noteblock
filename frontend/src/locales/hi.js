@@ -113,6 +113,14 @@ export default {
   roomUsers: 'रूम उपयोगकर्ता',
   banConfirm: 'इस गाने को इस वेन्यू पर बैन करें?',
 
+  // Guest room
+  clearHistory: 'इतिहास साफ करें',
+  noHistory: 'अभी तक कोई अनुरोध नहीं',
+  jukeboxOff: 'जुकबॉक्स बंद है',
+  jukeboxOffMsg: 'अभी गाने के अनुरोध बंद हैं। जल्द वापस आएं!',
+  queuingMode: 'कतार मोड',
+  queuingModeMsg: 'अभी गाने जोड़ें — होस्ट शुरू करने पर बजेंगे।',
+
   // Common
   loading: 'लोड हो रहा है…',
   error: 'कुछ गलत हो गया',

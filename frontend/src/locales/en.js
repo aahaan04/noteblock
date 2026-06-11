@@ -113,6 +113,14 @@ export default {
   roomUsers: 'Room Users',
   banConfirm: 'Ban this song from this venue?',
 
+  // Guest room
+  clearHistory: 'Clear History',
+  noHistory: 'No requests yet',
+  jukeboxOff: 'Jukebox is off',
+  jukeboxOffMsg: 'Song requests are closed right now. Check back soon!',
+  queuingMode: 'Queuing mode',
+  queuingModeMsg: 'Add songs now — they play when the host starts.',
+
   // Common
   loading: 'Loading…',
   error: 'Something went wrong',
