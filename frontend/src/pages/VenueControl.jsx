@@ -125,8 +125,11 @@ export default function VenueControl() {
   const pendingQueue = queue.filter(i => i.status === 'pending');
   const isActive = venue.status === 'active';
 
-  const nowPlayingTitle = nowPlaying?.type === 'requested' ? nowPlaying?.item?.song_title : (vibeActive ? 'Vibe Mode' : null);
+  const nowPlayingTitle = nowPlaying?.type === 'requested' ? nowPlaying?.item?.song_title : (nowPlaying?.type === 'vibe' ? nowPlaying?.title : null);
   const nowPlayingRequester = nowPlaying?.type === 'requested' ? nowPlaying?.item?.requester_name : null;
+  const vibeChannel = nowPlaying?.type === 'vibe'
+    ? (vibeVideos.find(v => v.videoId === nowPlaying.videoId)?.channel ?? 'YouTube')
+    : null;
 
   // Player panel — shared between mobile and desktop
   const playerPanel = (
@@ -153,34 +156,70 @@ export default function VenueControl() {
         </div>
       </div>
       {/* Song info bar below visualizer */}
-      {nowPlayingTitle && !venue.jukebox_paused && (
-        <div style={{ padding: '4px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#F0E6D3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-            {nowPlayingTitle}
-          </div>
-          {nowPlayingRequester && (
-            <div style={{ fontSize: 13, color: '#8B6F52', flexShrink: 0 }}>by {nowPlayingRequester}</div>
+      {!venue.jukebox_paused && (nowPlayingTitle || vibeActive) && (
+        <div style={{ padding: '4px 0', minWidth: 0 }}>
+          {nowPlaying?.type === 'vibe' ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                <Radio size={12} color="#8B6F52" />
+                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: '#8B6F52' }}>Vibe Mode</span>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#F0E6D3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {nowPlayingTitle ?? <span style={{ color: '#5A4535' }}>Loading…</span>}
+              </div>
+              {vibeChannel && <div style={{ fontSize: 12, color: '#8B6F52', marginTop: 2 }}>{vibeChannel}</div>}
+            </>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#F0E6D3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {decode(nowPlayingTitle)}
+              </div>
+              {nowPlayingRequester && (
+                <div style={{ fontSize: 13, color: '#8B6F52', flexShrink: 0 }}>by {nowPlayingRequester}</div>
+              )}
+            </div>
           )}
         </div>
       )}
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 12 }}>
         <button
-          className="btn-secondary"
-          style={{ flex: 1, fontSize: 13, borderColor: venue.jukebox_paused ? '#FF6B35' : '#2A1F17', color: venue.jukebox_paused ? '#FF6B35' : '#F0E6D3' }}
           onClick={() => handleVenueUpdate({ jukebox_paused: !venue.jukebox_paused })}
+          style={{
+            flex: 1, height: 52, borderRadius: 8, border: '1px solid #2A1F17',
+            background: '#3D2B1A', color: '#F0E6D3', fontWeight: 700, fontSize: 14,
+            fontFamily: 'inherit', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+          }}
         >
-          {venue.jukebox_paused ? <><Play size={15} /> Resume</> : <><Pause size={15} /> Pause</>}
+          {venue.jukebox_paused ? <><Play size={16} /> Resume</> : <><Pause size={16} /> Pause</>}
         </button>
         {!nowPlaying && !venue.jukebox_paused && (
-          <button className="btn-primary" style={{ flex: 1, fontSize: 13, background: '#22c55e' }}
-            onClick={() => playerRef.current?.start()}>
-            <Play size={15} /> Start
+          <button
+            onClick={() => playerRef.current?.start()}
+            style={{
+              flex: 1, height: 52, borderRadius: 8, border: 'none',
+              background: '#22c55e', color: '#0E0A07', fontWeight: 700, fontSize: 14,
+              fontFamily: 'inherit', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              boxShadow: '0 0 14px rgba(34,197,94,0.35)',
+            }}
+          >
+            <Play size={16} /> Start
           </button>
         )}
         {nowPlaying && !venue.jukebox_paused && (
-          <button className="btn-primary" style={{ flex: 1, fontSize: 13, opacity: skipping ? 0.5 : 1 }}
-            onClick={handleSkip} disabled={skipping}>
-            <SkipForward size={15} /> {skipping ? '…' : t.skip}
+          <button
+            onClick={handleSkip} disabled={skipping}
+            style={{
+              flex: 1, height: 52, borderRadius: 8, border: 'none',
+              background: '#FF6B35', color: '#0E0A07', fontWeight: 700, fontSize: 14,
+              fontFamily: 'inherit', cursor: skipping ? 'default' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              boxShadow: '0 0 14px rgba(255,107,53,0.4)',
+              opacity: skipping ? 0.5 : 1,
+            }}
+          >
+            <SkipForward size={16} /> {skipping ? '…' : t.skip}
           </button>
         )}
       </div>
@@ -202,20 +241,8 @@ export default function VenueControl() {
       {tab === 'users'  && <UsersPanel venueId={id} token={token} />}
       {tab === 'stats'  && <StatsPanel stats={stats} />}
       {tab === 'qr'     && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 24, gap: 16 }}>
-          <div style={{ background: '#fff', padding: 16, borderRadius: 12 }}>
-            <VenueQRCode roomCode={venue.room_code} size={248} />
-          </div>
-          <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: '#FF6B35', letterSpacing: 4 }}>
-            {venue.room_code}
-          </div>
-          <p style={{ margin: 0, fontSize: 12, color: '#5A4535', textAlign: 'center' }}>
-            Guests can scan this to join your room
-          </p>
-          <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-            onClick={() => window.print()}>
-            <Download size={15} /> Download QR
-          </button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 24 }}>
+          <VenueQRCode roomCode={venue.room_code} size={248} />
         </div>
       )}
     </>
