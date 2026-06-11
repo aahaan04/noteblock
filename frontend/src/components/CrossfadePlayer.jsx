@@ -268,15 +268,53 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     get isIdle() { return S.current.mode === 'idle'; },
   }));
 
-  // ── pause / resume when host toggles jukebox ──────────────────────────────
+  // ── pause / resume when host toggles jukebox (with fade) ─────────────────
+
+  const pauseFadeRef = useRef(null);
+
+  function fadeOutAndPause(durationMs = 1500) {
+    const player = getActive();
+    if (!player) return;
+    clearInterval(pauseFadeRef.current);
+    let vol = 100;
+    const steps = 30;
+    const stepMs = durationMs / steps;
+    const decrement = 100 / steps;
+    pauseFadeRef.current = setInterval(() => {
+      vol = Math.max(0, vol - decrement);
+      try { player.setVolume(Math.round(vol)); } catch {}
+      if (vol <= 0) {
+        clearInterval(pauseFadeRef.current);
+        try { player.pauseVideo(); } catch {}
+      }
+    }, stepMs);
+  }
+
+  function fadeInOnResume(durationMs = 800) {
+    const player = getActive();
+    if (!player) return;
+    clearInterval(pauseFadeRef.current);
+    try { player.setVolume(0); player.playVideo(); player.unMute(); } catch {}
+    let vol = 0;
+    const steps = 20;
+    const stepMs = durationMs / steps;
+    const increment = 100 / steps;
+    pauseFadeRef.current = setInterval(() => {
+      vol = Math.min(100, vol + increment);
+      try { player.setVolume(Math.round(vol)); } catch {}
+      if (vol >= 100) clearInterval(pauseFadeRef.current);
+    }, stepMs);
+  }
 
   useEffect(() => {
     if (!initialized.current || !audioUnlocked.current) return;
     if (jukeboxPaused) {
-      try { getActive()?.pauseVideo(); } catch {}
+      clearInterval(pauseFadeRef.current);
+      fadeOutAndPause(1500);
       wasPlayingRef.current = false;
     } else if (S.current.mode !== 'idle') {
-      try { getActive()?.playVideo(); getActive()?.unMute(); getActive()?.setVolume(100); } catch {}
+      clearInterval(pauseFadeRef.current);
+      fadeInOnResume(800);
       wasPlayingRef.current = true;
     }
   }, [jukeboxPaused]); // eslint-disable-line
