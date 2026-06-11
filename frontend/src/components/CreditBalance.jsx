@@ -7,14 +7,14 @@ export default function CreditBalance({ balance, anonymous, onBuy }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 8,
-      background: '#1A1008',
-      border: '1px solid #2A1F17',
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border)',
       borderRadius: 999,
       padding: '6px 14px',
     }}>
-      <Coins size={16} color="#C89B6E" />
-      <span style={{ fontWeight: 700, fontSize: 16, color: '#C89B6E' }}>{balance}</span>
-      <span style={{ fontSize: 13, color: '#8B6F52' }}>{t.credits}</span>
+      <Coins size={16} color="var(--credits)" />
+      <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--credits)' }}>{balance}</span>
+      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t.credits}</span>
       {onBuy && (
         <button
           onClick={onBuy}
@@ -22,7 +22,7 @@ export default function CreditBalance({ balance, anonymous, onBuy }) {
             marginLeft: 4,
             background: '#FF6B35',
             border: 'none',
-            color: '#F0E6D3',
+            color: 'var(--text-primary)',
             fontSize: 11,
             fontWeight: 700,
             padding: '3px 10px',
@@ -35,7 +35,7 @@ export default function CreditBalance({ balance, anonymous, onBuy }) {
       )}
       {anonymous && (
         <span title={t.anonymousCreditWarning} style={{ cursor: 'help', display: 'flex', alignItems: 'center' }}>
-          <AlertTriangle size={14} color="#8B6F52" />
+          <AlertTriangle size={14} color="var(--text-secondary)" />
         </span>
       )}
     </div>

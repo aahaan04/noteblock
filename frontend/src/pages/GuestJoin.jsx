@@ -107,13 +107,13 @@ export default function GuestJoin() {
   const outerStyle = {
     minHeight: '100svh', display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center', padding: '24px 16px',
-    background: 'radial-gradient(ellipse at center, rgba(255,107,53,0.06) 0%, transparent 70%), #0E0A07',
+    background: 'radial-gradient(ellipse at center, rgba(255,107,53,0.06) 0%, transparent 70%), var(--bg-app)',
   };
 
   // ── Error state ───────────────────────────────────────────────────────────────
   if (venueError) return (
     <div style={outerStyle}>
-      <Music size={48} color="#2A1F17" style={{ marginBottom: 16 }} />
+      <Music size={48} color="var(--border)" style={{ marginBottom: 16 }} />
       <p style={{ color: '#f87171' }}>{venueError}</p>
       <button className="btn-secondary" onClick={() => navigate('/')}>
         <ArrowRight size={14} style={{ transform: 'rotate(180deg)' }} /> Home
@@ -126,7 +126,7 @@ export default function GuestJoin() {
   if (phase === 'detecting' || (!venue && !venueError)) return (
     <div style={outerStyle}>
       <Loader size={32} color="#FF6B35" style={{ marginBottom: 16, animation: 'spin 1s linear infinite' }} />
-      <p style={{ color: '#8B6F52', fontSize: 14 }}>
+      <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
         {!venue ? 'Loading room...' : 'Signing you in...'}
       </p>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
@@ -142,8 +142,8 @@ export default function GuestJoin() {
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
             <Logo size={64} />
           </div>
-          <h1 style={{ margin: '0 0 4px', fontSize: 28, fontWeight: 900, color: '#F0E6D3' }}>{venue.name}</h1>
-          <p style={{ color: '#8B6F52', margin: 0, fontSize: 13 }}>Request songs for this venue</p>
+          <h1 style={{ margin: '0 0 4px', fontSize: 28, fontWeight: 900, color: 'var(--text-primary)' }}>{venue.name}</h1>
+          <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: 13 }}>Request songs for this venue</p>
         </div>
 
         {/* ── Phase: email ── */}
@@ -164,8 +164,8 @@ export default function GuestJoin() {
               {busy ? 'Sending...' : <><Mail size={16} /> Send Magic Link</>}
             </button>
             {venue.welcome_credits > 0 && (
-              <p style={{ textAlign: 'center', fontSize: 13, color: '#8B6F52', margin: 0 }}>
-                Get {venue.welcome_credits} <strong style={{ color: '#C89B6E' }}>free credits</strong> on first visit
+              <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+                Get {venue.welcome_credits} <strong style={{ color: 'var(--credits)' }}>free credits</strong> on first visit
               </p>
             )}
           </form>
@@ -175,16 +175,16 @@ export default function GuestJoin() {
         {phase === 'sent' && (
           <div style={{ textAlign: 'center' }}>
             <CheckCircle size={56} color="#34d399" style={{ marginBottom: 16 }} />
-            <h2 style={{ margin: '0 0 8px', color: '#F0E6D3', fontSize: 20 }}>Check your email</h2>
-            <p style={{ color: '#8B6F52', fontSize: 14, margin: '0 0 16px' }}>
+            <h2 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 20 }}>Check your email</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: '0 0 16px' }}>
               We sent a magic link to<br />
-              <strong style={{ color: '#F0E6D3' }}>{email}</strong>
+              <strong style={{ color: 'var(--text-primary)' }}>{email}</strong>
             </p>
-            <p style={{ color: '#5A4535', fontSize: 12, margin: '0 0 20px' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: 12, margin: '0 0 20px' }}>
               Click the link to be taken straight into the room.
             </p>
             <button
-              style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', fontSize: 13 }}
+              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13 }}
               onClick={() => { setPhase('email'); setError(''); }}
             >
               Use a different email
@@ -196,10 +196,10 @@ export default function GuestJoin() {
         {phase === 'name' && (
           <form onSubmit={handleSetName} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#8B6F52', marginBottom: 6 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
                 <User size={12} /> Your display name
               </label>
-              <p style={{ margin: '0 0 10px', fontSize: 13, color: '#8B6F52' }}>
+              <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--text-secondary)' }}>
                 This is how you appear when requesting songs.
               </p>
               <input

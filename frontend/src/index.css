@@ -20,6 +20,9 @@
   --text-primary: #1A0E06;
   --text-secondary: #7A5C42;
   --text-muted: #B89880;
+  --btn-normal: #E8D9C8;
+  --logo-bg: #6B4226;
+  --credits: #C89B6E;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -60,7 +63,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
 
 .btn-primary {
   background: var(--accent);
-  color: #0E0A07;
+  color: var(--bg-app);
   font-weight: 700;
   font-size: 15px;
   height: 52px;

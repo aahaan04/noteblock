@@ -11,8 +11,8 @@ export default function QueueDisplay({ items, isHost, onRemove, onSkip, nowPlayi
   if (!pending.length) {
     return (
       <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-        <ListMusic size={48} color="#2A1F17" style={{ marginBottom: 12 }} />
-        <div style={{ color: '#5A4535', fontSize: 14 }}>{t.emptyQueue}</div>
+        <ListMusic size={48} color="var(--border)" style={{ marginBottom: 12 }} />
+        <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t.emptyQueue}</div>
       </div>
     );
   }
@@ -39,13 +39,13 @@ function QueueItem({ item, position, isHost, onRemove }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
-      background: '#1A1008',
-      border: `1px solid ${isQuick ? '#FF6B35' : '#2A1F17'}`,
+      background: 'var(--bg-card)',
+      border: `1px solid ${isQuick ? '#FF6B35' : 'var(--border)'}`,
       borderRadius: 10,
       padding: '12px 14px',
       boxShadow: isQuick ? '0 0 10px rgba(255,107,53,0.12)' : 'none',
     }}>
-      <span style={{ color: '#5A4535', fontFamily: 'monospace', minWidth: 20, fontSize: 13 }}>
+      <span style={{ color: 'var(--text-muted)', fontFamily: 'monospace', minWidth: 20, fontSize: 13 }}>
         {position}
       </span>
       {item.thumbnail_url && (
@@ -56,17 +56,17 @@ function QueueItem({ item, position, isHost, onRemove }) {
         />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3' }}>
+        <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-primary)' }}>
           {decode(item.song_title)}
         </div>
-        <div style={{ fontSize: 12, color: '#8B6F52' }}>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
           {t.requestedBy} {decode(item.requester_name) ?? 'Guest'}
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         {isQuick ? (
           <span style={{
-            background: '#FF6B35', color: '#0E0A07',
+            background: '#FF6B35', color: 'var(--bg-app)',
             fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
             display: 'flex', alignItems: 'center', gap: 3,
           }}>
@@ -74,7 +74,7 @@ function QueueItem({ item, position, isHost, onRemove }) {
           </span>
         ) : (
           <span style={{
-            background: '#3D2B1A', color: '#C89B6E',
+            background: 'var(--btn-normal)', color: 'var(--credits)',
             fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
           }}>
             NORMAL
@@ -83,7 +83,7 @@ function QueueItem({ item, position, isHost, onRemove }) {
         {isHost && (
           <button
             onClick={() => onRemove(item.id)}
-            style={{ background: 'none', border: 'none', color: '#5A4535', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
             title={t.removeFromQueue}
           >
             <X size={16} />

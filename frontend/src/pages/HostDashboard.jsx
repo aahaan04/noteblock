@@ -68,7 +68,7 @@ export default function HostDashboard() {
   return (
     <div style={{
       maxWidth: 800, margin: '0 auto', padding: '20px 16px', minHeight: '100vh',
-      background: 'radial-gradient(ellipse at 50% 30%, rgba(255,107,53,0.04) 0%, transparent 60%), #0E0A07',
+      background: 'radial-gradient(ellipse at 50% 30%, rgba(255,107,53,0.04) 0%, transparent 60%), var(--bg-app)',
     }}>
 
       {/* ── Header ── */}
@@ -76,23 +76,23 @@ export default function HostDashboard() {
         {/* Top row: logo + settings icon only */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
           <Logo size={30} />
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#F0E6D3', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Noteblock
           </h1>
           <button
             onClick={() => navigate('/settings')}
-            style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center', flexShrink: 0 }}
+            style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center', flexShrink: 0 }}
             title={t.settings}
           >
             <Settings size={18} />
           </button>
         </div>
-        <p style={{ margin: 0, color: '#8B6F52', fontSize: 13, paddingLeft: 40 }}>{profile?.display_name}</p>
+        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13, paddingLeft: 40 }}>{profile?.display_name}</p>
       </div>
 
       {/* ── Venues header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#F0E6D3' }}>{t.myVenues}</h2>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{t.myVenues}</h2>
         <button className="btn-primary" onClick={() => { setShowCreate(true); setCreateError(''); }}
           style={{ fontSize: 13, padding: '9px 16px', boxShadow: '0 0 16px rgba(255,107,53,0.35)' }}>
           <Plus size={15} /> {t.createVenue}
@@ -102,7 +102,7 @@ export default function HostDashboard() {
       {/* ── Create form ── */}
       {showCreate && (
         <form onSubmit={createVenue} style={{
-          background: '#1A1008', border: '1px solid #FF6B35',
+          background: 'var(--bg-card)', border: '1px solid #FF6B35',
           borderRadius: 10, padding: 16, marginBottom: 20,
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
@@ -120,11 +120,11 @@ export default function HostDashboard() {
         </form>
       )}
 
-      {loading && <p style={{ color: '#8B6F52', textAlign: 'center' }}>{t.loading}</p>}
+      {loading && <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>{t.loading}</p>}
 
       {!loading && venues.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#8B6F52', padding: '3rem 0' }}>
-          <Home size={48} color="#2A1F17" style={{ marginBottom: 12 }} />
+        <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '3rem 0' }}>
+          <Home size={48} color="var(--border)" style={{ marginBottom: 12 }} />
           <p>{t.noVenues}</p>
           <button className="btn-primary" onClick={() => setShowCreate(true)}>
             <Plus size={16} /> {t.createVenue}
@@ -163,16 +163,16 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobi
   const isActive = venue.status === 'active';
 
   return (
-    <div style={{ background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 12, padding: '20px' }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px' }}>
       {/* Venue name + status badge */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#F0E6D3', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {venue.name}
         </h3>
         <span style={{
           fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0,
-          background: isActive ? 'rgba(52,211,153,0.12)' : '#2A1F17',
-          color: isActive ? '#34d399' : '#5A4535',
+          background: isActive ? 'rgba(52,211,153,0.12)' : 'var(--border)',
+          color: isActive ? '#34d399' : 'var(--text-muted)',
         }}>
           {isActive ? t.active : t.closed}
         </span>
@@ -181,7 +181,7 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobi
       {/* Room code badge */}
       <div style={{ marginBottom: 16 }}>
         <span style={{
-          background: '#2A1F17', color: '#8B6F52', borderRadius: 6,
+          background: 'var(--border)', color: 'var(--text-secondary)', borderRadius: 6,
           padding: '4px 10px', fontFamily: 'monospace', letterSpacing: 2, fontSize: 12,
         }}>
           {venue.room_code}
@@ -218,7 +218,7 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobi
       )}
 
       {showQR && (
-        <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #2A1F17', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center' }}>
           <VenueQRCode roomCode={venue.room_code} size={180} />
         </div>
       )}

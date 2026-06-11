@@ -201,7 +201,7 @@ export default function GuestRoom() {
   const vibeActive = !nowPlayingItem && venue?.vibe_mode_enabled && queue.filter(i => i.status === 'pending').length === 0;
   const bannedIds = new Set(banned.map(b => b.youtube_video_id));
 
-  if (!venue) return <div className="center-screen"><p style={{ color: '#8B6F52' }}>{t.loading}</p></div>;
+  if (!venue) return <div className="center-screen"><p style={{ color: 'var(--text-secondary)' }}>{t.loading}</p></div>;
 
   const tabs = [
     { key: 'search', icon: <Search size={14} />, label: 'Search' },
@@ -210,16 +210,16 @@ export default function GuestRoom() {
   ];
 
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 0 80px', minHeight: '100vh', background: '#0E0A07' }}>
+    <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 0 80px', minHeight: '100vh', background: 'var(--bg-app)' }}>
       {/* Header — 52px sticky */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 50,
-        background: '#120C06', borderBottom: '1px solid #2A1F17',
+        background: 'var(--bg-page)', borderBottom: '1px solid var(--border)',
         height: 52, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12,
       }}>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
           <Logo size={20} />
-          <span style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3' }}>
+          <span style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-primary)' }}>
             {venue.name}
           </span>
           {vibeActive && (
@@ -236,16 +236,16 @@ export default function GuestRoom() {
         /* FULLY PAUSED — hide now-playing entirely, show off message */
         <div style={{ padding: '12px 16px 0' }}>
           <div style={{
-            background: '#1A1008', border: '1px solid #2A1F17',
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
             borderRadius: 10, padding: '12px 16px',
             display: 'flex', alignItems: 'center', gap: 14,
           }}>
-            <Pause size={24} color="#5A4535" style={{ flexShrink: 0 }} />
+            <Pause size={24} color="var(--text-muted)" style={{ flexShrink: 0 }} />
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: '#F0E6D3', marginBottom: 2 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>
                 Jukebox is off
               </div>
-              <div style={{ fontSize: 12, color: '#8B6F52' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                 Song requests are closed right now. Check back soon!
               </div>
             </div>
@@ -278,12 +278,12 @@ export default function GuestRoom() {
         <>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, padding: '10px 16px', borderBottom: '1px solid #2A1F17' }}>
+      <div style={{ display: 'flex', gap: 4, padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
         {tabs.map(({ key, icon, label }) => (
           <button key={key} onClick={() => setTab(key)} style={{
             flex: 1, minHeight: 44, padding: '6px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12,
             background: tab === key ? '#FF6B35' : 'transparent',
-            color: tab === key ? '#0E0A07' : '#8B6F52',
+            color: tab === key ? 'var(--bg-app)' : 'var(--text-secondary)',
             fontWeight: tab === key ? 700 : 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontFamily: 'inherit',
           }}>
             {icon} {label}
@@ -296,16 +296,16 @@ export default function GuestRoom() {
         {tab === 'queue' && <QueueDisplay items={queue} isHost={false} />}
         {tab === 'history' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {!sessionHistory.length && <p style={{ color: '#8B6F52', textAlign: 'center' }}>{t.requestHistory}</p>}
+            {!sessionHistory.length && <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>{t.requestHistory}</p>}
             {sessionHistory.map((s, i) => (
               <div key={i} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
-                background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 10, padding: '10px 14px',
+                background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px',
               }}>
                 {s.thumbnail && <img src={s.thumbnail} alt="" style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 4 }} />}
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#F0E6D3' }}>{s.title}</div>
-                  <div style={{ fontSize: 11, color: '#8B6F52' }}>{s.playType} · {s.credits} {t.credits}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{s.playType} · {s.credits} {t.credits}</div>
                 </div>
               </div>
             ))}
@@ -315,21 +315,21 @@ export default function GuestRoom() {
 
       {/* Song confirmation modal */}
       {selected && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,10,7,0.85)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200, padding: '0 0 16px' }}>
-          <div style={{ background: '#120C06', border: '1px solid #2A1F17', borderRadius: '14px 14px 10px 10px', padding: 24, width: '100%', maxWidth: 520 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200, padding: '0 0 16px' }}>
+          <div style={{ background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: '14px 14px 10px 10px', padding: 24, width: '100%', maxWidth: 520 }}>
             <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
               {selected.thumbnail && <img src={selected.thumbnail} alt="" style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 8 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0E6D3' }}>{decode(selected.title)}</div>
-                <div style={{ fontSize: 12, color: '#8B6F52' }}>{decode(selected.channel)}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-primary)' }}>{decode(selected.title)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{decode(selected.channel)}</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-              <button style={{ flex: 1, minHeight: 56, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= 2 ? '#3D2B1A' : '#1A1008', color: credits >= 2 ? '#F0E6D3' : '#5A4535', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < 2 ? 0.5 : 1 }}
+              <button style={{ flex: 1, minHeight: 56, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= 2 ? 'var(--btn-normal)' : 'var(--bg-card)', color: credits >= 2 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < 2 ? 0.5 : 1 }}
                 onClick={() => handleConfirm('normal')} disabled={credits < 2}>
-                {t.normalPlay}<br /><span style={{ fontSize: 12, fontWeight: 400, color: '#8B6F52' }}>2 {t.credits}</span>
+                {t.normalPlay}<br /><span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)' }}>2 {t.credits}</span>
               </button>
-              <button style={{ flex: 1, minHeight: 56, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= quickPrice ? '#FF6B35' : '#1A1008', color: '#F0E6D3', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < quickPrice ? 0.5 : 1, boxShadow: credits >= quickPrice ? '0 0 16px rgba(255,107,53,0.45)' : 'none' }}
+              <button style={{ flex: 1, minHeight: 56, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= quickPrice ? '#FF6B35' : 'var(--bg-card)', color: 'var(--text-primary)', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < quickPrice ? 0.5 : 1, boxShadow: credits >= quickPrice ? '0 0 16px rgba(255,107,53,0.45)' : 'none' }}
                 onClick={() => handleConfirm('quick')} disabled={credits < quickPrice}>
                 Quick Play<br /><span style={{ fontSize: 12, fontWeight: 400 }}>{quickPrice} {t.credits}</span>
               </button>
@@ -342,7 +342,7 @@ export default function GuestRoom() {
       ) : null}
 
       {toast && (
-        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#1A1008', border: '1px solid #FF6B35', borderRadius: 999, padding: '10px 20px', fontSize: 14, fontWeight: 600, zIndex: 300, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', color: '#F0E6D3', whiteSpace: 'nowrap' }}>
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: 'var(--bg-card)', border: '1px solid #FF6B35', borderRadius: 999, padding: '10px 20px', fontSize: 14, fontWeight: 600, zIndex: 300, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
           {toast}
         </div>
       )}

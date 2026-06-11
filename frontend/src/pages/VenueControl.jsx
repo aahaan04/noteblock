@@ -131,7 +131,7 @@ export default function VenueControl() {
     } catch {}
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#8B6F52', background: '#0E0A07', minHeight: '100vh' }}>{t.loading}</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-app)', minHeight: '100vh' }}>{t.loading}</div>;
   if (!venue) return null;
 
   const bannedIds = new Set(banned.map(b => b.youtube_video_id));
@@ -176,21 +176,21 @@ export default function VenueControl() {
           {nowPlaying?.type === 'vibe' ? (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                <Radio size={12} color="#8B6F52" />
-                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: '#8B6F52' }}>Vibe Mode</span>
+                <Radio size={12} color="var(--text-secondary)" />
+                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Vibe Mode</span>
               </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#F0E6D3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {nowPlayingTitle ?? <span style={{ color: '#5A4535' }}>Loading…</span>}
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {nowPlayingTitle ?? <span style={{ color: 'var(--text-muted)' }}>Loading…</span>}
               </div>
-              {vibeChannel && <div style={{ fontSize: 12, color: '#8B6F52', marginTop: 2 }}>{vibeChannel}</div>}
+              {vibeChannel && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{vibeChannel}</div>}
             </>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#F0E6D3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                 {decode(nowPlayingTitle)}
               </div>
               {nowPlayingRequester && (
-                <div style={{ fontSize: 13, color: '#8B6F52', flexShrink: 0 }}>by {nowPlayingRequester}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', flexShrink: 0 }}>by {nowPlayingRequester}</div>
               )}
             </div>
           )}
@@ -200,8 +200,8 @@ export default function VenueControl() {
         <button
           onClick={() => handleVenueUpdate({ jukebox_paused: !venue.jukebox_paused })}
           style={{
-            flex: 1, height: 52, borderRadius: 8, border: '1px solid #2A1F17',
-            background: '#3D2B1A', color: '#F0E6D3', fontWeight: 700, fontSize: 14,
+            flex: 1, height: 52, borderRadius: 8, border: '1px solid var(--border)',
+            background: 'var(--btn-normal)', color: 'var(--text-primary)', fontWeight: 700, fontSize: 14,
             fontFamily: 'inherit', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
           }}
@@ -213,7 +213,7 @@ export default function VenueControl() {
             onClick={() => playerRef.current?.start()}
             style={{
               flex: 1, height: 52, borderRadius: 8, border: 'none',
-              background: '#22c55e', color: '#0E0A07', fontWeight: 700, fontSize: 14,
+              background: '#22c55e', color: 'var(--bg-app)', fontWeight: 700, fontSize: 14,
               fontFamily: 'inherit', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
               boxShadow: '0 0 14px rgba(34,197,94,0.35)',
@@ -227,7 +227,7 @@ export default function VenueControl() {
             onClick={handleSkip} disabled={skipping}
             style={{
               flex: 1, height: 52, borderRadius: 8, border: 'none',
-              background: '#FF6B35', color: '#0E0A07', fontWeight: 700, fontSize: 14,
+              background: '#FF6B35', color: 'var(--bg-app)', fontWeight: 700, fontSize: 14,
               fontFamily: 'inherit', cursor: skipping ? 'default' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
               boxShadow: '0 0 14px rgba(255,107,53,0.4)',
@@ -241,7 +241,7 @@ export default function VenueControl() {
       {venue.jukebox_paused && (
         <div style={{ background: '#2A0808', border: '1px solid #FF6B35', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
           <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: '#C89B6E' }}>Guests cannot request songs while paused</span>
+          <span style={{ fontSize: 13, color: 'var(--credits)' }}>Guests cannot request songs while paused</span>
         </div>
       )}
     </div>
@@ -268,13 +268,13 @@ export default function VenueControl() {
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10,
       padding: isMobile ? '10px 12px' : '12px 20px',
-      background: '#1A1008', borderBottom: '1px solid #2A1F17', flexShrink: 0,
+      background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', flexShrink: 0,
     }}>
-      <button onClick={() => navigate('/host/dashboard')} style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}>
+      <button onClick={() => navigate('/host/dashboard')} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}>
         <ArrowLeft size={20} />
       </button>
       {!isMobile && <Logo size={26} />}
-      <h1 style={{ margin: 0, fontSize: isMobile ? 15 : 18, fontWeight: 800, flex: 1, color: '#F0E6D3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <h1 style={{ margin: 0, fontSize: isMobile ? 15 : 18, fontWeight: 800, flex: 1, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {venue.name}
       </h1>
       <span style={{
@@ -310,7 +310,7 @@ export default function VenueControl() {
     const activeMainTab = ['vibe', 'ban', 'stats'].includes(tab) ? 'manage' : tab === 'player' ? 'player' : tab;
 
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0E0A07' }}>
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-app)' }}>
         {topBar}
 
         {/* Scrollable content */}
@@ -328,8 +328,8 @@ export default function VenueControl() {
                 {manageTabs.map(mt => (
                   <button key={mt.key} onClick={() => { setTab(mt.key); if (mt.key === 'stats') loadStats(); }} style={{
                     flex: 1, padding: '8px 4px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                    background: tab === mt.key ? '#FF6B35' : '#1A1008',
-                    color: tab === mt.key ? '#F0E6D3' : '#8B6F52',
+                    background: tab === mt.key ? '#FF6B35' : 'var(--bg-card)',
+                    color: tab === mt.key ? 'var(--text-primary)' : 'var(--text-secondary)',
                     fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
                   }}>
                     {mt.label}
@@ -345,8 +345,8 @@ export default function VenueControl() {
 
         {/* Bottom nav */}
         <div style={{
-          display: 'flex', borderTop: '1px solid #2A1F17',
-          background: '#120C06', flexShrink: 0,
+          display: 'flex', borderTop: '1px solid var(--border)',
+          background: 'var(--bg-page)', flexShrink: 0,
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}>
           {mobileTabs.map(({ key, icon, label }) => {
@@ -363,7 +363,7 @@ export default function VenueControl() {
                 style={{
                   flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                   gap: 3, padding: '10px 4px', background: 'none', border: 'none', cursor: 'pointer',
-                  color: active ? '#FF6B35' : '#5A4535',
+                  color: active ? '#FF6B35' : 'var(--text-muted)',
                 }}
               >
                 {icon}
@@ -387,23 +387,23 @@ export default function VenueControl() {
   ];
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0E0A07' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-app)' }}>
       {topBar}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Left — player */}
-        <div style={{ flex: '0 0 480px', padding: 20, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', borderRight: '1px solid #2A1F17' }}>
+        <div style={{ flex: '0 0 480px', padding: 20, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', borderRight: '1px solid var(--border)' }}>
           {playerPanel}
         </div>
         {/* Right — tabs */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', gap: 4, padding: '12px 16px', borderBottom: '1px solid #2A1F17', overflowX: 'auto', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 4, padding: '12px 16px', borderBottom: '1px solid var(--border)', overflowX: 'auto', flexShrink: 0 }}>
             {desktopTabs.map(({ key, icon, label }) => (
               <button key={key}
                 onClick={() => { setTab(key); if (key === 'stats') loadStats(); }}
                 style={{
                   padding: '6px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                  background: tab === key ? '#FF6B35' : '#1A1008',
-                  color: tab === key ? '#F0E6D3' : '#8B6F52',
+                  background: tab === key ? '#FF6B35' : 'var(--bg-card)',
+                  color: tab === key ? 'var(--text-primary)' : 'var(--text-secondary)',
                   fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
@@ -427,25 +427,25 @@ function Toggle({ checked, onChange, label, description }) {
     <div style={{
       display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
       gap: 16, padding: '14px 16px',
-      background: '#0E0A07', border: '1px solid #2A1F17', borderRadius: 10,
+      background: 'var(--bg-app)', border: '1px solid var(--border)', borderRadius: 10,
     }}>
       <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: '#F0E6D3', marginBottom: 3 }}>{label}</div>
-        {description && <div style={{ fontSize: 12, color: '#8B6F52', lineHeight: 1.4 }}>{description}</div>}
+        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 3 }}>{label}</div>
+        {description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{description}</div>}
       </div>
       {/* iOS-style pill toggle */}
       <button
         onClick={onChange}
         style={{
           flexShrink: 0, width: 48, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer',
-          background: checked ? '#FF6B35' : '#2A1F17',
+          background: checked ? '#FF6B35' : 'var(--border)',
           position: 'relative', transition: 'background 0.2s',
           padding: 0,
         }}
       >
         <span style={{
           position: 'absolute', top: 4, left: checked ? 24 : 4,
-          width: 20, height: 20, borderRadius: '50%', background: '#F0E6D3',
+          width: 20, height: 20, borderRadius: '50%', background: 'var(--text-primary)',
           transition: 'left 0.2s', display: 'block',
         }} />
       </button>
@@ -498,7 +498,7 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
 
       {/* ── Pre-event queuing ── */}
       <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#8B6F52', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
           Guest Requests
         </div>
         <Toggle
@@ -512,11 +512,11 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
       {/* Confirmation toast */}
       {pendingToggle && (
         <div style={{
-          background: '#1A1008', border: '1px solid #FF6B35',
+          background: 'var(--bg-card)', border: '1px solid #FF6B35',
           borderRadius: 12, padding: '14px 16px',
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          <p style={{ margin: 0, fontSize: 13, color: '#F0E6D3', lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
             {pendingToggle.newVal
               ? 'Guests will be able to request songs while the jukebox is paused. Their songs will queue up and play when you start the jukebox.'
               : 'Guests will NOT be able to request songs while the jukebox is paused. Requests will be blocked until you start the jukebox.'}
@@ -532,11 +532,11 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
         </div>
       )}
 
-      <div style={{ height: 1, background: '#2A1F17' }} />
+      <div style={{ height: 1, background: 'var(--border)' }} />
 
       {/* ── Vibe mode ── */}
       <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#8B6F52', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
           Vibe Mode
         </div>
         <Toggle
@@ -548,32 +548,32 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
       </div>
 
       <div>
-        <label style={{ fontSize: 13, color: '#8B6F52', display: 'block', marginBottom: 6 }}>{t.vibeDescription}</label>
+        <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{t.vibeDescription}</label>
         <input className="input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. upbeat party hits, 2000s pop, lofi chill" />
       </div>
 
       <div>
-        <label style={{ fontSize: 13, color: '#8B6F52', display: 'block', marginBottom: 6 }}>{t.vibePlaylistUrls}</label>
+        <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{t.vibePlaylistUrls}</label>
         <textarea className="input" value={urls} onChange={e => setUrls(e.target.value)} rows={3}
           placeholder="https://youtube.com/playlist?list=..." style={{ resize: 'vertical' }} />
       </div>
 
-      <div style={{ height: 1, background: '#2A1F17' }} />
+      <div style={{ height: 1, background: 'var(--border)' }} />
 
       {/* ── Playback & credits ── */}
       <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#8B6F52', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
           Playback & Credits
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={{ fontSize: 13, color: '#8B6F52', display: 'block', marginBottom: 6 }}>
-              {t.crossfadeDuration}: <strong style={{ color: '#F0E6D3' }}>{crossfade}s</strong>
+            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+              {t.crossfadeDuration}: <strong style={{ color: 'var(--text-primary)' }}>{crossfade}s</strong>
             </label>
             <input type="range" min={2} max={10} value={crossfade} onChange={e => setCrossfade(e.target.value)} style={{ width: '100%', accentColor: '#FF6B35' }} />
           </div>
           <div>
-            <label style={{ fontSize: 13, color: '#8B6F52', display: 'block', marginBottom: 6 }}>{t.welcomeCredits}</label>
+            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{t.welcomeCredits}</label>
             <input className="input" type="number" min={0} max={100} value={welcome} onChange={e => setWelcome(e.target.value)} style={{ width: 120 }} />
           </div>
         </div>
@@ -587,13 +587,13 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
           <button
             onClick={onResetVibeHistory}
             style={{
-              background: 'none', border: '1px solid #2A1F17', borderRadius: 8,
-              color: '#8B6F52', cursor: 'pointer', fontFamily: 'inherit',
+              background: 'none', border: '1px solid var(--border)', borderRadius: 8,
+              color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit',
               fontSize: 13, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 6,
               transition: 'border-color 0.15s, color 0.15s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF6B35'; e.currentTarget.style.color = '#F0E6D3'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A1F17'; e.currentTarget.style.color = '#8B6F52'; }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF6B35'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
           >
             <RefreshCw size={14} /> Reset Vibe History ({vibePlayedCount})
           </button>
@@ -620,13 +620,13 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
 
   return (
     <div>
-      <h3 style={{ marginTop: 0, color: '#F0E6D3' }}>{t.banSong}</h3>
+      <h3 style={{ marginTop: 0, color: 'var(--text-primary)' }}>{t.banSong}</h3>
       <SongSearch bannedIds={bannedIds} onSelect={setSelected} />
 
       {selected && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,10,7,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
-          <div style={{ background: '#120C06', border: '1px solid #2A1F17', borderRadius: 10, padding: 24, maxWidth: 360, width: '100%' }}>
-            <p style={{ margin: '0 0 16px', fontWeight: 600, color: '#F0E6D3' }}>Ban "{selected.title}" from this venue?</p>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
+          <div style={{ background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 10, padding: 24, maxWidth: 360, width: '100%' }}>
+            <p style={{ margin: '0 0 16px', fontWeight: 600, color: 'var(--text-primary)' }}>Ban "{selected.title}" from this venue?</p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn-primary" style={{ flex: 1, background: '#f87171' }} onClick={() => handleBan(selected)}>
                 <Ban size={15} /> {t.banSong}
@@ -637,17 +637,17 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
         </div>
       )}
 
-      <h3 style={{ marginTop: 24, color: '#F0E6D3' }}>{t.bannedSongs}</h3>
+      <h3 style={{ marginTop: 24, color: 'var(--text-primary)' }}>{t.bannedSongs}</h3>
       {!banned.length && (
         <div style={{ textAlign: 'center', padding: '20px 0' }}>
-          <ShieldOff size={40} color="#2A1F17" style={{ marginBottom: 8 }} />
-          <div style={{ color: '#5A4535', fontSize: 14 }}>No songs banned</div>
+          <ShieldOff size={40} color="var(--border)" style={{ marginBottom: 8 }} />
+          <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>No songs banned</div>
         </div>
       )}
       {banned.map(b => (
-        <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 7, padding: '8px 12px', marginBottom: 8 }}>
+        <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 12px', marginBottom: 8 }}>
           {b.thumbnail_url && <img src={b.thumbnail_url} alt="" style={{ width: 40, height: 30, objectFit: 'cover', borderRadius: 4 }} />}
-          <span style={{ flex: 1, fontSize: 14, color: '#F0E6D3', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(b.song_title)}</span>
+          <span style={{ flex: 1, fontSize: 14, color: 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(b.song_title)}</span>
           <button onClick={() => handleUnban(b.id)} style={{ background: 'none', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6, color: '#f87171', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', padding: '3px 10px' }}>
             {t.unban}
           </button>
@@ -661,21 +661,21 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
 
 function StatsPanel({ stats }) {
   const { t } = useLang();
-  if (!stats) return <p style={{ color: '#8B6F52' }}>{t.loading}</p>;
+  if (!stats) return <p style={{ color: 'var(--text-secondary)' }}>{t.loading}</p>;
   return (
     <div>
       <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
         <StatCard label={t.requestsToday} value={stats.totalRequests} />
         <StatCard label={t.creditsDistributed} value={stats.totalCredits} />
       </div>
-      <h3 style={{ color: '#F0E6D3', marginTop: 0, marginBottom: 12 }}>{t.topSongs}</h3>
+      <h3 style={{ color: 'var(--text-primary)', marginTop: 0, marginBottom: 12 }}>{t.topSongs}</h3>
       {stats.topSongs.map((s, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid #2A1F17', fontSize: 14 }}>
+        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--border)', fontSize: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            <span style={{ color: '#5A4535', fontFamily: 'monospace', minWidth: 18, fontSize: 13 }}>{i + 1}</span>
-            <span style={{ color: '#F0E6D3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(s.title)}</span>
+            <span style={{ color: 'var(--text-muted)', fontFamily: 'monospace', minWidth: 18, fontSize: 13 }}>{i + 1}</span>
+            <span style={{ color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(s.title)}</span>
           </div>
-          <span style={{ background: '#2A1F17', color: '#8B6F52', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0, marginLeft: 8 }}>{s.count}x</span>
+          <span style={{ background: 'var(--border)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0, marginLeft: 8 }}>{s.count}x</span>
         </div>
       ))}
     </div>
@@ -684,9 +684,9 @@ function StatsPanel({ stats }) {
 
 function StatCard({ label, value }) {
   return (
-    <div style={{ flex: 1, background: '#1A1008', border: '1px solid #2A1F17', borderRadius: 10, padding: '16px 20px', textAlign: 'center' }}>
+    <div style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', textAlign: 'center' }}>
       <div style={{ fontSize: 36, fontWeight: 800, color: '#FF6B35' }}>{value}</div>
-      <div style={{ fontSize: 12, color: '#8B6F52', marginTop: 4, textTransform: 'uppercase', letterSpacing: 2 }}>{label}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, textTransform: 'uppercase', letterSpacing: 2 }}>{label}</div>
     </div>
   );
 }
@@ -817,12 +817,12 @@ function UsersPanel({ venueId, token }) {
   const allUsers = [...visibleUsers, ...onlineOnly];
   const displayed = filter === 'banned' ? allUsers.filter(u => u.banned) : allUsers;
 
-  if (loading) return <p style={{ color: '#8B6F52' }}>Loading users…</p>;
+  if (loading) return <p style={{ color: 'var(--text-secondary)' }}>Loading users…</p>;
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h3 style={{ margin: 0, color: '#F0E6D3', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h3 style={{ margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Users size={18} color="#FF6B35" /> Room Users
           {onlineUsers.length > 0 && (
             <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
@@ -834,20 +834,20 @@ function UsersPanel({ venueId, token }) {
           {['all', 'banned'].map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-              background: filter === f ? '#FF6B35' : '#1A1008',
-              color: filter === f ? '#F0E6D3' : '#8B6F52',
+              background: filter === f ? '#FF6B35' : 'var(--bg-card)',
+              color: filter === f ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}>
               {f === 'all' ? `All (${allUsers.length})` : `Banned (${allUsers.filter(u => u.banned).length})`}
             </button>
           ))}
-          <button onClick={load} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #2A1F17', background: 'none', color: '#8B6F52', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+          <button onClick={load} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
             <RefreshCw size={13} />
           </button>
         </div>
       </div>
 
       {!displayed.length && (
-        <p style={{ color: '#8B6F52', textAlign: 'center', marginTop: 32 }}>
+        <p style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: 32 }}>
           {filter === 'banned' ? 'No banned users' : 'No one in the room yet'}
         </p>
       )}
@@ -859,8 +859,8 @@ function UsersPanel({ venueId, token }) {
           return (
             <div key={u.name} style={{
               display: 'flex', alignItems: 'center', gap: 12,
-              background: u.banned ? 'rgba(248,113,113,0.06)' : '#1A1008',
-              border: `1px solid ${u.banned ? 'rgba(248,113,113,0.3)' : isOnline ? 'rgba(52,211,153,0.25)' : '#2A1F17'}`,
+              background: u.banned ? 'rgba(248,113,113,0.06)' : 'var(--bg-card)',
+              border: `1px solid ${u.banned ? 'rgba(248,113,113,0.3)' : isOnline ? 'rgba(52,211,153,0.25)' : 'var(--border)'}`,
               borderRadius: 10, padding: '10px 14px', position: 'relative',
             }}>
               {/* Avatar with online dot */}
@@ -878,7 +878,7 @@ function UsersPanel({ venueId, token }) {
                   <div style={{
                     position: 'absolute', bottom: 0, right: 0,
                     width: 10, height: 10, borderRadius: '50%',
-                    background: '#34d399', border: '2px solid #1A1008',
+                    background: '#34d399', border: '2px solid var(--bg-card)',
                   }} />
                 )}
               </div>
@@ -886,7 +886,7 @@ function UsersPanel({ venueId, token }) {
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160, color: '#F0E6D3' }}>
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160, color: 'var(--text-primary)' }}>
                     {u.name || 'Anonymous'}
                   </span>
                   <span style={{
@@ -901,7 +901,7 @@ function UsersPanel({ venueId, token }) {
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: '#8B6F52' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                   {u.onlineOnly ? 'Just joined · no requests yet' : `${u.requests} ${u.requests === 1 ? 'song' : 'songs'} · ${u.credits} credits spent`}
                 </div>
               </div>
@@ -911,9 +911,9 @@ function UsersPanel({ venueId, token }) {
                 <button
                   onClick={() => setOpenMenu(openMenu === u.name ? null : u.name)}
                   style={{
-                    width: 32, height: 32, borderRadius: 7, border: '1px solid #2A1F17',
-                    background: openMenu === u.name ? '#FF6B35' : '#1A1008',
-                    color: openMenu === u.name ? '#F0E6D3' : '#8B6F52',
+                    width: 32, height: 32, borderRadius: 7, border: '1px solid var(--border)',
+                    background: openMenu === u.name ? '#FF6B35' : 'var(--bg-card)',
+                    color: openMenu === u.name ? 'var(--text-primary)' : 'var(--text-secondary)',
                     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}
                 >
@@ -923,7 +923,7 @@ function UsersPanel({ venueId, token }) {
                 {openMenu === u.name && (
                   <div style={{
                     position: 'absolute', right: 0, top: 36, zIndex: 100,
-                    background: '#120C06', border: '1px solid #2A1F17',
+                    background: 'var(--bg-page)', border: '1px solid var(--border)',
                     borderRadius: 10, minWidth: 160,
                     boxShadow: '0 8px 24px rgba(0,0,0,0.5)', overflow: 'hidden',
                   }}>
@@ -945,10 +945,10 @@ function UsersPanel({ venueId, token }) {
 
       {/* Remove modal */}
       {modal?.type === 'remove' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,10,7,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
-          <div style={{ background: '#120C06', border: '1px solid #2A1F17', borderRadius: 10, padding: 24, maxWidth: 340, width: '100%' }}>
-            <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 16, color: '#F0E6D3' }}>Remove "{modal.user.name}"?</p>
-            <p style={{ margin: '0 0 20px', fontSize: 13, color: '#8B6F52' }}>Their pending song requests will be removed. They can still rejoin and request songs again.</p>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+          <div style={{ background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 10, padding: 24, maxWidth: 340, width: '100%' }}>
+            <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>Remove "{modal.user.name}"?</p>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-secondary)' }}>Their pending song requests will be removed. They can still rejoin and request songs again.</p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn-secondary" style={{ flex: 1, borderColor: '#8B6F52' }} onClick={() => handleRemove(modal.user.name)}>
                 <X size={15} /> Remove
@@ -961,10 +961,10 @@ function UsersPanel({ venueId, token }) {
 
       {/* Ban modal */}
       {modal?.type === 'ban' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,10,7,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
-          <div style={{ background: '#120C06', border: '1px solid #2A1F17', borderRadius: 10, padding: 24, maxWidth: 340, width: '100%' }}>
-            <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 16, color: '#F0E6D3' }}>Ban "{modal.user.name}"?</p>
-            <p style={{ margin: '0 0 20px', fontSize: 13, color: '#8B6F52' }}>They won't be able to request songs in this room anymore.</p>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+          <div style={{ background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 10, padding: 24, maxWidth: 340, width: '100%' }}>
+            <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>Ban "{modal.user.name}"?</p>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-secondary)' }}>They won't be able to request songs in this room anymore.</p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn-primary" style={{ flex: 1, background: '#f87171' }} onClick={() => handleBan(modal.user.name)}>
                 <Ban size={15} /> Ban
@@ -977,12 +977,12 @@ function UsersPanel({ venueId, token }) {
 
       {/* Gift modal */}
       {modal?.type === 'gift' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,10,7,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
-          <div style={{ background: '#120C06', border: '1px solid #2A1F17', borderRadius: 10, padding: 24, maxWidth: 340, width: '100%' }}>
-            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 16, color: '#F0E6D3', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Gift size={18} color="#C89B6E" /> Gift Credits
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+          <div style={{ background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 10, padding: 24, maxWidth: 340, width: '100%' }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Gift size={18} color="var(--credits)" /> Gift Credits
             </p>
-            <p style={{ margin: '0 0 8px', fontSize: 13, color: '#8B6F52' }}>To: <strong style={{ color: '#F0E6D3' }}>{modal.user.name}</strong></p>
+            <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-secondary)' }}>To: <strong style={{ color: 'var(--text-primary)' }}>{modal.user.name}</strong></p>
             {!modal.user.isRegistered && (
               <p style={{ margin: '0 0 12px', fontSize: 11, color: '#C89B6E', display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(200,155,110,0.08)', border: '1px solid rgba(200,155,110,0.2)', borderRadius: 7, padding: '8px 10px' }}>
                 <AlertTriangle size={11} /> This user appears to be a guest. Gifted credits only land in accounts — ask them to sign in first if they want to receive them.
@@ -993,9 +993,9 @@ function UsersPanel({ venueId, token }) {
               {[10, 25, 50, 100].map(amt => (
                 <button key={amt} onClick={() => setGiftAmount(String(amt))} style={{
                   flex: 1, padding: '8px 0', borderRadius: 7,
-                  border: `1px solid ${giftAmount === String(amt) ? '#FF6B35' : '#2A1F17'}`,
-                  background: giftAmount === String(amt) ? 'rgba(255,107,53,0.15)' : '#1A1008',
-                  color: giftAmount === String(amt) ? '#FF6B35' : '#F0E6D3',
+                  border: `1px solid ${giftAmount === String(amt) ? '#FF6B35' : 'var(--border)'}`,
+                  background: giftAmount === String(amt) ? 'rgba(255,107,53,0.15)' : 'var(--bg-card)',
+                  color: giftAmount === String(amt) ? '#FF6B35' : 'var(--text-primary)',
                   cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: 'inherit',
                 }}>
                   {amt}
@@ -1032,9 +1032,9 @@ function MenuBtn({ icon, label, color, onClick }) {
     <button onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 8,
       width: '100%', padding: '10px 14px', background: 'none', border: 'none',
-      color: color ?? '#F0E6D3', cursor: 'pointer', textAlign: 'left', fontSize: 13, fontFamily: 'inherit',
+      color: color ?? 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontSize: 13, fontFamily: 'inherit',
     }}
-      onMouseEnter={e => e.currentTarget.style.background = '#1A1008'}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card)'}
       onMouseLeave={e => e.currentTarget.style.background = 'none'}
     >
       {icon} {label}
