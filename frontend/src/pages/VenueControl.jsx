@@ -239,9 +239,9 @@ export default function VenueControl() {
         )}
       </div>
       {venue.jukebox_paused && (
-        <div style={{ background: '#2A0808', border: '1px solid #FF6B35', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
+        <div style={{ background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.4)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
           <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: 'var(--credits)' }}>Guests cannot request songs while paused</span>
+          <span style={{ fontSize: 13, color: '#FF6B35', fontWeight: 600 }}>Guests cannot request songs while paused</span>
         </div>
       )}
     </div>
@@ -558,6 +558,23 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
           placeholder="https://youtube.com/playlist?list=..." style={{ resize: 'vertical' }} />
       </div>
 
+      {vibePlayedCount > 0 && (
+        <button
+          onClick={onResetVibeHistory}
+          style={{
+            background: 'none', border: '1px solid var(--border)', borderRadius: 8,
+            color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit',
+            fontSize: 13, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 6,
+            alignSelf: 'flex-start',
+            transition: 'border-color 0.15s, color 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF6B35'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+        >
+          <RefreshCw size={14} /> Reset Vibe History ({vibePlayedCount})
+        </button>
+      )}
+
       <div style={{ height: 1, background: 'var(--border)' }} />
 
       {/* ── Playback & credits ── */}
@@ -579,26 +596,9 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button className="btn-primary" onClick={save} disabled={saving} style={{ padding: '10px 24px' }}>
-          <Save size={15} /> {saving ? t.loading : t.save}
-        </button>
-        {vibePlayedCount > 0 && (
-          <button
-            onClick={onResetVibeHistory}
-            style={{
-              background: 'none', border: '1px solid var(--border)', borderRadius: 8,
-              color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit',
-              fontSize: 13, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 6,
-              transition: 'border-color 0.15s, color 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF6B35'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-          >
-            <RefreshCw size={14} /> Reset Vibe History ({vibePlayedCount})
-          </button>
-        )}
-      </div>
+      <button className="btn-primary" onClick={save} disabled={saving} style={{ alignSelf: 'flex-start', padding: '10px 24px' }}>
+        <Save size={15} /> {saving ? t.loading : t.save}
+      </button>
     </div>
   );
 }
