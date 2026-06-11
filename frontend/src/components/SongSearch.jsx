@@ -125,7 +125,7 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
             <span>Suggested for this vibe</span>
           </div>
           {suggestionsLoading && (
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: '8px 0' }}>Loading suggestions…</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: '8px 0' }}>{t.searching}</div>
           )}
           {!suggestionsLoading && suggestions.length === 0 && (
             <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>No suggestions available</div>

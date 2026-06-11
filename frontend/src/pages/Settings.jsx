@@ -82,7 +82,8 @@ export default function Settings() {
             <button key={code} onClick={() => setLang(code)} style={{
               flex: 1, padding: 12, borderRadius: 7, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 15,
               background: lang === code ? '#FF6B35' : 'var(--bg-card)',
-              color: lang === code ? 'var(--text-primary)' : 'var(--text-secondary)',
+              color: 'var(--text-primary)',
+              opacity: lang === code ? 1 : 0.6,
               transition: 'all 0.15s', fontFamily: 'inherit',
             }}>
               {label}

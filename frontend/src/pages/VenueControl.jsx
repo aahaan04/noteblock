@@ -180,7 +180,7 @@ export default function VenueControl() {
                 <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>{t.vibeModeLabel}</span>
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {nowPlayingTitle ?? <span style={{ color: 'var(--text-muted)' }}>Loading…</span>}
+                {nowPlayingTitle ?? <span style={{ color: 'var(--text-muted)' }}>{t.loading}</span>}
               </div>
               {vibeChannel && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{vibeChannel}</div>}
             </>
@@ -620,7 +620,7 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
 
   return (
     <div>
-      <h3 style={{ marginTop: 0, color: 'var(--text-primary)' }}>{t.banSong}</h3>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>{t.banSong}</div>
       <SongSearch bannedIds={bannedIds} onSelect={setSelected} />
 
       {selected && (
@@ -637,7 +637,7 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
         </div>
       )}
 
-      <h3 style={{ marginTop: 24, color: 'var(--text-primary)' }}>{t.bannedSongs}</h3>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '24px 0 10px' }}>{t.bannedSongs}</div>
       {!banned.length && (
         <div style={{ textAlign: 'center', padding: '20px 0' }}>
           <ShieldOff size={40} color="var(--border)" style={{ marginBottom: 8 }} />
@@ -818,7 +818,7 @@ function UsersPanel({ venueId, token }) {
   const allUsers = [...visibleUsers, ...onlineOnly];
   const displayed = filter === 'banned' ? allUsers.filter(u => u.banned) : allUsers;
 
-  if (loading) return <p style={{ color: 'var(--text-secondary)' }}>Loading users…</p>;
+  if (loading) return <p style={{ color: 'var(--text-secondary)' }}>{t.loading}</p>;
 
   return (
     <div>

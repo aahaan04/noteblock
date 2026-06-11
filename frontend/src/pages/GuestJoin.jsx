@@ -4,12 +4,14 @@ import { Mail, User, ArrowRight, Music, CheckCircle, Loader } from 'lucide-react
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useLang } from '../context/LangContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
 
 export default function GuestJoin() {
   const { roomCode } = useParams();
   const { profile, token, loading, sendMagicLink, refreshProfile } = useAuth();
+  const { t } = useLang();
   const navigate = useNavigate();
 
   const [venue, setVenue] = useState(null);
@@ -127,7 +129,7 @@ export default function GuestJoin() {
     <div style={outerStyle}>
       <Loader size={32} color="#FF6B35" style={{ marginBottom: 16, animation: 'spin 1s linear infinite' }} />
       <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-        {!venue ? 'Loading room...' : 'Signing you in...'}
+        {t.loading}
       </p>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       <VersionFooter />
