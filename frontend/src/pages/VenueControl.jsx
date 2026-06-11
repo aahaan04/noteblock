@@ -694,6 +694,7 @@ function StatCard({ label, value }) {
 // ── Users panel ───────────────────────────────────────────────────────────────
 
 function UsersPanel({ venueId, token }) {
+  const { t } = useLang();
   const [users, setUsers] = useState([]);
   const [bannedUsers, setBannedUsers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]); // from Supabase Presence
