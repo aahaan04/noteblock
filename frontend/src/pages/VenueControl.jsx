@@ -27,7 +27,6 @@ import { supabase } from '../lib/supabase.js';
 import CrossfadePlayer from '../components/CrossfadePlayer.jsx';
 import Visualizer from '../components/Visualizer.jsx';
 import QueueDisplay from '../components/QueueDisplay.jsx';
-import NowPlaying from '../components/NowPlaying.jsx';
 import VenueQRCode from '../components/VenueQRCode.jsx';
 import SongSearch from '../components/SongSearch.jsx';
 
@@ -164,7 +163,6 @@ export default function VenueControl() {
           )}
         </div>
       )}
-      <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
       <div style={{ display: 'flex', gap: 10 }}>
         <button
           className="btn-secondary"
