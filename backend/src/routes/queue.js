@@ -117,6 +117,17 @@ router.patch('/:itemId', requireAuth, async (req, res) => {
     .single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
+  // When marking a new song as 'playing', auto-retire any other songs that are
+  // still stuck in 'playing' state (handles host browser crash / missed callbacks)
+  if (status === 'playing') {
+    await supabaseAdmin
+      .from('queue_items')
+      .update({ status: 'played' })
+      .eq('venue_id', req.params.venueId)
+      .eq('status', 'playing')
+      .neq('id', req.params.itemId); // don't touch the one we're about to mark
+  }
+
   const { data, error } = await supabaseAdmin
     .from('queue_items')
     .update({ status })

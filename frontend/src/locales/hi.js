@@ -114,6 +114,8 @@ export default {
   banConfirm: 'इस गाने को इस वेन्यू पर बैन करें?',
 
   // Guest room
+  search: 'खोज',
+  historyTab: 'इतिहास',
   clearHistory: 'इतिहास साफ करें',
   noHistory: 'अभी तक कोई अनुरोध नहीं',
   jukeboxOff: 'जुकबॉक्स बंद है',

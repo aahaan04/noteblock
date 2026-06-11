@@ -310,7 +310,7 @@ export default function GuestRoom() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues' },
         (payload) => { if (payload.new?.id === venue.id) setVenue(payload.new); })
       .subscribe();
-    const poll = setInterval(() => { loadQueue(venue.id); refreshVenue(); }, 5000);
+    const poll = setInterval(() => { loadQueue(venue.id); refreshVenue(); }, 3000);
     return () => { supabase.removeChannel(qSub); supabase.removeChannel(vSub); clearInterval(poll); };
   }, [venue?.id]); // eslint-disable-line
 
@@ -406,9 +406,9 @@ export default function GuestRoom() {
   if (!venue) return <div className="center-screen"><p style={{ color: 'var(--text-secondary)' }}>{t.loading}</p></div>;
 
   const tabs = [
-    { key: 'search',  icon: <Search size={14} />,   label: t.searchSongs.replace('…','').replace('…','') },
+    { key: 'search',  icon: <Search size={14} />,   label: t.search ?? 'Search' },
     { key: 'queue',   icon: <ListMusic size={14} />, label: `${t.queue} (${queue.filter(i => i.status === 'pending').length})` },
-    { key: 'history', icon: <Clock size={14} />,     label: 'History' },
+    { key: 'history', icon: <Clock size={14} />,     label: t.historyTab },
   ];
 
   return (

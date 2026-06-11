@@ -114,6 +114,8 @@ export default {
   banConfirm: 'Ban this song from this venue?',
 
   // Guest room
+  search: 'Search',
+  historyTab: 'History',
   clearHistory: 'Clear History',
   noHistory: 'No requests yet',
   jukeboxOff: 'Jukebox is off',

@@ -9,7 +9,7 @@ export default function NowPlaying({ nowPlaying, vibeActive }) {
   if (!nowPlaying && !vibeActive) return null;
 
   const isVibe = vibeActive || nowPlaying?.type === 'vibe';
-  const title = decode(isVibe ? (nowPlaying?.title ?? 'Vibe') : nowPlaying?.item?.song_title);
+  const title = decode(isVibe ? (nowPlaying?.title ?? t.vibe) : nowPlaying?.item?.song_title);
   const requester = !isVibe && nowPlaying?.item?.requester_name;
 
   return (
@@ -29,16 +29,17 @@ export default function NowPlaying({ nowPlaying, vibeActive }) {
         {isVibe ? <Radio size={20} /> : <Play size={14} />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Label row — no uppercase transform so Hindi/Chinese render correctly */}
         <div style={{
-          fontSize: 10, fontWeight: 700, letterSpacing: 2,
+          fontSize: 10, fontWeight: 700, letterSpacing: 1,
           color: isVibe ? 'var(--text-secondary)' : '#FF6B35',
-          textTransform: 'uppercase', marginBottom: 2,
+          marginBottom: 2,
           display: 'flex', alignItems: 'center', gap: 4,
         }}>
           {isVibe ? (
-            <><Radio size={10} /> VIBE</>
+            <><Radio size={10} /> {t.vibe}</>
           ) : (
-            <><Play size={10} /> NOW PLAYING</>
+            <><Play size={10} /> {t.nowPlaying}</>
           )}
         </div>
         <div style={{ fontWeight: 700, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-primary)' }}>

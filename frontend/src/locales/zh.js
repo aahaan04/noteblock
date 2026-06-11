@@ -114,6 +114,8 @@ export default {
   banConfirm: '将此歌曲从该场地封禁？',
 
   // Guest room
+  search: '搜索',
+  historyTab: '历史',
   clearHistory: '清除历史',
   noHistory: '暂无请求记录',
   jukeboxOff: '点唱机已关闭',
