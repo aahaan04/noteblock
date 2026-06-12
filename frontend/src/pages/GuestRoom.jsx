@@ -38,6 +38,68 @@ function formatHistoryDate(ts) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+// ── Warning popup shown when guest tries to request while jukebox is off ─────
+function PausedWarnPopup({ onDismiss, t }) {
+  useEffect(() => {
+    const timer = setTimeout(onDismiss, 3500);
+    return () => clearTimeout(timer);
+  }, []); // eslint-disable-line
+
+  return (
+    <div
+      onClick={onDismiss}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 500,
+        background: 'rgba(0,0,0,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--bg-page)', border: '1px solid var(--border)',
+          borderRadius: 20, padding: '32px 24px 24px',
+          width: '100%', maxWidth: 320, textAlign: 'center',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+          animation: 'popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards',
+          position: 'relative',
+        }}
+      >
+        <button
+          onClick={onDismiss}
+          style={{
+            position: 'absolute', top: 12, right: 12,
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: 6, color: 'var(--text-muted)',
+            cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center',
+          }}
+        >
+          <X size={14} />
+        </button>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%',
+          background: 'rgba(255,107,53,0.12)', border: '2px solid rgba(255,107,53,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 16px',
+          animation: 'checkPop 0.4s 0.15s cubic-bezier(0.34,1.56,0.64,1) both',
+        }}>
+          <Pause size={28} color="#FF6B35" />
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>
+          {t.jukeboxOff}
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 18 }}>
+          {t.jukeboxOffMsg}
+        </div>
+        <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: '100%', background: '#FF6B35', borderRadius: 2, animation: 'drainBar 3.5s linear forwards' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Confetti popup shown when a song is successfully added ──────────────────
 function SongAddedPopup({ popup, onDismiss }) {
   const particles = useMemo(() => {
@@ -212,6 +274,7 @@ export default function GuestRoom() {
   const [tab, setTab] = useState('search');
   const [toast, setToast] = useState('');
   const [songPopup, setSongPopup] = useState(null); // { title, playType, credits }
+  const [pausedWarn, setPausedWarn] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsName, setSettingsName] = useState(profile?.display_name ?? '');
   const [nameSaved, setNameSaved] = useState(false);
@@ -339,7 +402,7 @@ export default function GuestRoom() {
   async function handleConfirm(playType) {
     if (!selected || !venue) return;
     if (venue.jukebox_paused && !venue.queue_open_when_paused) {
-      showToast('Jukebox is paused — try again soon'); setSelected(null); return;
+      setPausedWarn(true); setSelected(null); return;
     }
     const cost = playType === 'normal' ? 2 : quickPrice;
     if (credits < cost) { showToast(t.insufficientCredits); return; }
@@ -448,8 +511,8 @@ export default function GuestRoom() {
       </div>
 
       {/* ── Status area ── */}
-      {venue.jukebox_paused && !venue.queue_open_when_paused ? (
-        <div style={{ padding: '12px 16px 0' }}>
+      <div style={{ padding: '12px 16px 0' }}>
+        {venue.jukebox_paused && !venue.queue_open_when_paused ? (
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
             <Pause size={24} color="var(--text-muted)" style={{ flexShrink: 0 }} />
             <div>
@@ -457,9 +520,7 @@ export default function GuestRoom() {
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t.jukeboxOffMsg}</div>
             </div>
           </div>
-        </div>
-      ) : venue.jukebox_paused && venue.queue_open_when_paused ? (
-        <div style={{ padding: '12px 16px 0' }}>
+        ) : venue.jukebox_paused && venue.queue_open_when_paused ? (
           <div style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#34d399' }}>
             <ListMusic size={16} style={{ flexShrink: 0 }} />
             <div>
@@ -467,16 +528,13 @@ export default function GuestRoom() {
               <div style={{ fontSize: 12, color: '#6ee7b7' }}>{t.queuingModeMsg}</div>
             </div>
           </div>
-        </div>
-      ) : (
-        <div style={{ padding: '12px 16px 0' }}>
+        ) : (
           <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} />
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* ── Tabs & content ── */}
-      {!(venue.jukebox_paused && !venue.queue_open_when_paused) && (
-        <>
+      {/* ── Tabs & content — always shown so guests can browse ── */}
+      <>
           <div style={{ display: 'flex', gap: 4, padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
             {tabs.map(({ key, icon, label }) => (
               <button key={key} onClick={() => setTab(key)} style={{
@@ -525,8 +583,7 @@ export default function GuestRoom() {
               </div>
             )}
           </div>
-        </>
-      )}
+      </>
 
       {/* ── Song confirmation modal ── */}
       {selected && (
@@ -558,6 +615,11 @@ export default function GuestRoom() {
 
       {/* ── Confetti popup (song queued) ── */}
       <SongAddedPopup popup={songPopup} onDismiss={() => setSongPopup(null)} />
+
+      {/* ── Jukebox paused warning popup ── */}
+      {pausedWarn && (
+        <PausedWarnPopup onDismiss={() => setPausedWarn(false)} t={t} />
+      )}
 
       {/* ── Settings sheet ── */}
       {showSettings && (

@@ -140,7 +140,7 @@ router.patch('/:itemId', requireAuth, async (req, res) => {
   res.json(data);
 });
 
-// DELETE /api/venues/:venueId/queue/:itemId — remove (host only)
+// DELETE /api/venues/:venueId/queue/:itemId — remove (host only), refunds credits if pending
 router.delete('/:itemId', requireAuth, async (req, res) => {
   const { data: venue } = await supabaseAdmin
     .from('venues')
@@ -150,6 +150,14 @@ router.delete('/:itemId', requireAuth, async (req, res) => {
     .single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
+  // Fetch item before removal so we can refund if it was pending
+  const { data: item } = await supabaseAdmin
+    .from('queue_items')
+    .select('status, credits_charged, user_id')
+    .eq('id', req.params.itemId)
+    .eq('venue_id', req.params.venueId)
+    .single();
+
   const { error } = await supabaseAdmin
     .from('queue_items')
     .update({ status: 'removed' })
@@ -157,7 +165,23 @@ router.delete('/:itemId', requireAuth, async (req, res) => {
     .eq('venue_id', req.params.venueId);
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
+
+  // Refund credits to the requester if the song hadn't started playing yet
+  if (item?.status === 'pending' && item.user_id && item.credits_charged > 0) {
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('credits_balance')
+      .eq('id', item.user_id)
+      .single();
+    if (user) {
+      await supabaseAdmin
+        .from('users')
+        .update({ credits_balance: (user.credits_balance ?? 0) + item.credits_charged })
+        .eq('id', item.user_id);
+    }
+  }
+
+  res.json({ success: true, refunded: item?.status === 'pending' && item?.credits_charged > 0 ? item.credits_charged : 0 });
 });
 
 export default router;
