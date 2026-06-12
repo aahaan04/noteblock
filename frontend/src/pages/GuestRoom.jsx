@@ -295,7 +295,7 @@ export default function GuestRoom() {
   const [settingsName, setSettingsName] = useState(profile?.display_name ?? '');
   const [nameSaved, setNameSaved] = useState(false);
   const prevCreditsRef = useRef(null);
-  const lastRealtimeVenueAtRef = useRef(0); // when realtime last updated venue (beats stale polls)
+  const jukeboxPausedSinceRef = useRef(0); // timestamp when jukebox_paused last became true
 
   // Redirect to join if not authenticated
   useEffect(() => {
@@ -347,6 +347,7 @@ export default function GuestRoom() {
   async function loadVenue() {
     try {
       const v = await api.venues.getByCode(roomCode);
+      if (v.jukebox_paused) jukeboxPausedSinceRef.current = Date.now();
       setVenue(v);
       loadQueue(v.id);
       loadBanned(v.id);
@@ -362,11 +363,17 @@ export default function GuestRoom() {
 
   async function refreshVenue() {
     try {
-      const startedAt = Date.now();
       const v = await api.venues.getByCode(roomCode);
-      // Don't let a stale in-flight poll clobber a fresher realtime update
-      if (lastRealtimeVenueAtRef.current > startedAt) return;
-      setVenue(v);
+      setVenue(current => {
+        // Suppress a poll that flips paused→false within 8s of it being set to true.
+        // This covers Supabase read-replica lag: realtime reads the primary (instant)
+        // but REST API reads a replica that can lag several seconds behind.
+        if (current?.jukebox_paused && !v.jukebox_paused) {
+          if (Date.now() - jukeboxPausedSinceRef.current < 8000) return current;
+        }
+        if (v.jukebox_paused) jukeboxPausedSinceRef.current = Date.now();
+        return v;
+      });
     } catch {}
   }
 
@@ -391,7 +398,11 @@ export default function GuestRoom() {
     const vSub = supabase
       .channel(`guest-venue-${venue.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues' },
-        (payload) => { if (payload.new?.id === venue.id) { lastRealtimeVenueAtRef.current = Date.now(); setVenue(payload.new); } })
+        (payload) => {
+          if (payload.new?.id !== venue.id) return;
+          if (payload.new?.jukebox_paused) jukeboxPausedSinceRef.current = Date.now();
+          setVenue(payload.new);
+        })
       .subscribe();
     const poll = setInterval(() => { loadQueue(venue.id); refreshVenue(); }, 3000);
     return () => { supabase.removeChannel(qSub); supabase.removeChannel(vSub); clearInterval(poll); };
@@ -421,14 +432,7 @@ export default function GuestRoom() {
 
   async function handleConfirm(playType) {
     if (!selected || !venue) return;
-    // Re-check live venue state so a stale poll can't let a paused-room request through
-    let live = venue;
-    try {
-      live = await api.venues.getByCode(roomCode);
-      lastRealtimeVenueAtRef.current = Date.now();
-      setVenue(live);
-    } catch {}
-    if (live.jukebox_paused && !live.queue_open_when_paused) {
+    if (venue.jukebox_paused && !venue.queue_open_when_paused) {
       setPausedWarn(true); setSelected(null); return;
     }
     const cost = playType === 'normal' ? 2 : quickPrice;
