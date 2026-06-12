@@ -55,6 +55,22 @@ function PausedWarnPopup({ onDismiss, t }) {
         padding: 24,
       }}
     >
+      <style>{`
+        @keyframes pwPopIn {
+          0%   { opacity: 0; transform: scale(0.7) translateY(20px); }
+          60%  { transform: scale(1.04) translateY(-4px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes pwIconPop {
+          0%   { transform: scale(0); opacity: 0; }
+          70%  { transform: scale(1.2); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes pwDrain {
+          0%   { width: 100%; }
+          100% { width: 0%; }
+        }
+      `}</style>
       <div
         onClick={e => e.stopPropagation()}
         style={{
@@ -62,7 +78,7 @@ function PausedWarnPopup({ onDismiss, t }) {
           borderRadius: 20, padding: '32px 24px 24px',
           width: '100%', maxWidth: 320, textAlign: 'center',
           boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
-          animation: 'popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards',
+          animation: 'pwPopIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards',
           position: 'relative',
         }}
       >
@@ -82,7 +98,7 @@ function PausedWarnPopup({ onDismiss, t }) {
           background: 'rgba(255,107,53,0.12)', border: '2px solid rgba(255,107,53,0.4)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           margin: '0 auto 16px',
-          animation: 'checkPop 0.4s 0.15s cubic-bezier(0.34,1.56,0.64,1) both',
+          animation: 'pwIconPop 0.4s 0.15s cubic-bezier(0.34,1.56,0.64,1) both',
         }}>
           <Pause size={28} color="#FF6B35" />
         </div>
@@ -93,7 +109,7 @@ function PausedWarnPopup({ onDismiss, t }) {
           {t.jukeboxOffMsg}
         </div>
         <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-          <div style={{ height: '100%', background: '#FF6B35', borderRadius: 2, animation: 'drainBar 3.5s linear forwards' }} />
+          <div style={{ height: '100%', background: '#FF6B35', borderRadius: 2, animation: 'pwDrain 3.5s linear forwards' }} />
         </div>
       </div>
     </div>
@@ -434,6 +450,7 @@ export default function GuestRoom() {
       if (msg === 'insufficient_credits') showToast(t.insufficientCredits);
       else if (msg === 'song_banned') showToast(t.songBanned);
       else if (msg === 'user_banned') showToast('You have been banned from this jukebox');
+      else if (msg === 'jukebox_paused') setPausedWarn(true);
       else showToast(t.error);
     }
   }
