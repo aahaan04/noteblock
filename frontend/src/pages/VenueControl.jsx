@@ -55,6 +55,17 @@ export default function VenueControl() {
     loadVenue(); loadQueue(); loadBanned();
   }, [id, token]);
 
+  // Write vibe track info to venue so guests can see what's playing
+  useEffect(() => {
+    if (!id || !token) return;
+    if (nowPlaying?.type === 'vibe' && nowPlaying.videoId) {
+      const channel = vibeVideos.find(v => v.videoId === nowPlaying.videoId)?.channel ?? null;
+      api.venues.update(id, { vibe_now_playing_title: nowPlaying.title ?? null, vibe_now_playing_channel: channel }, token).catch(() => {});
+    } else if (nowPlaying?.type !== 'vibe') {
+      api.venues.update(id, { vibe_now_playing_title: null, vibe_now_playing_channel: null }, token).catch(() => {});
+    }
+  }, [nowPlaying?.videoId]); // eslint-disable-line
+
   async function loadVenue() {
     try {
       const v = await api.venues.get(id, token);

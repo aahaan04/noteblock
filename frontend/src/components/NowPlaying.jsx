@@ -3,14 +3,15 @@ import { useLang } from '../context/LangContext.jsx';
 
 const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
-export default function NowPlaying({ nowPlaying, vibeActive }) {
+export default function NowPlaying({ nowPlaying, vibeActive, vibeTitle, vibeChannel }) {
   const { t } = useLang();
 
   if (!nowPlaying && !vibeActive) return null;
 
   const isVibe = vibeActive || nowPlaying?.type === 'vibe';
-  const title = decode(isVibe ? (nowPlaying?.title ?? t.vibe) : nowPlaying?.item?.song_title);
+  const title = decode(isVibe ? (nowPlaying?.title ?? vibeTitle ?? t.vibe) : nowPlaying?.item?.song_title);
   const requester = !isVibe && nowPlaying?.item?.requester_name;
+  const channel = isVibe ? vibeChannel : null;
 
   return (
     <div style={{
@@ -48,6 +49,11 @@ export default function NowPlaying({ nowPlaying, vibeActive }) {
         {requester && (
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             {t.requestedBy} {requester}
+          </div>
+        )}
+        {channel && (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            {channel}
           </div>
         )}
       </div>

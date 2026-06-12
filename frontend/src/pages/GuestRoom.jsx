@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Search, ListMusic, Clock, Music, Pause, Settings, X, Sun, Moon, LogOut, Check } from 'lucide-react';
+import { Search, ListMusic, Clock, Pause, Settings, X, Sun, Moon, LogOut, Check } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -426,8 +426,8 @@ export default function GuestRoom() {
             {venue.name}
           </span>
           {vibeActive && (
-            <span style={{ fontSize: 11, color: '#FF6B35', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Music size={11} /> {t.vibeMode}
+            <span style={{ fontSize: 11, color: '#FF6B35', fontWeight: 600 }}>
+              {t.vibeMode}
             </span>
           )}
         </div>
@@ -470,7 +470,7 @@ export default function GuestRoom() {
         </div>
       ) : (
         <div style={{ padding: '12px 16px 0' }}>
-          <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} />
+          <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} />
         </div>
       )}
 
