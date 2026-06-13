@@ -533,10 +533,10 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
               : 'Guests will NOT be able to request songs while the jukebox is paused. Requests will be blocked until you start the jukebox.'}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn-primary" style={{ flex: 1, fontSize: 13 }} onClick={confirmQueueToggle}>
+            <button className="btn-primary" style={{ flex: 1, fontSize: 13, height: 42, boxShadow: 'none' }} onClick={confirmQueueToggle}>
               <Check size={14} /> Confirm
             </button>
-            <button className="btn-secondary" style={{ flex: 1, fontSize: 13 }} onClick={() => setPendingToggle(null)}>
+            <button className="btn-secondary" style={{ flex: 1, fontSize: 13, height: 42 }} onClick={() => setPendingToggle(null)}>
               <X size={14} /> Cancel
             </button>
           </div>

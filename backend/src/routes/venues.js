@@ -21,7 +21,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.get('/room/:roomCode', async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('venues')
-    .select('id, name, room_code, status, welcome_credits, vibe_mode_enabled')
+    .select('id, name, room_code, status, welcome_credits, vibe_mode_enabled, jukebox_paused, queue_open_when_paused, vibe_description, vibe_now_playing_title, vibe_now_playing_channel')
     .eq('room_code', req.params.roomCode)
     .single();
 
@@ -72,6 +72,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     'vibe_description', 'vibe_playlist_urls', 'vibe_mode_enabled',
     'vibe_current_video_index', 'vibe_current_position_seconds',
     'jukebox_paused', 'queue_open_when_paused', 'vibe_played_video_ids',
+    'vibe_now_playing_title', 'vibe_now_playing_channel',
   ];
   const updates = {};
   for (const key of allowed) {
