@@ -250,10 +250,17 @@ export default function VenueControl() {
         )}
       </div>
       {venue.jukebox_paused && (
-        <div style={{ background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.4)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
-          <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: '#FF6B35', fontWeight: 600 }}>{t.guestsCannotRequest}</span>
-        </div>
+        venue.queue_open_when_paused ? (
+          <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.4)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
+            <ListMusic size={18} color="#34d399" style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: '#34d399', fontWeight: 600 }}>{t.guestsCanQueuePaused}</span>
+          </div>
+        ) : (
+          <div style={{ background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.4)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
+            <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: '#FF6B35', fontWeight: 600 }}>{t.guestsCannotRequest}</span>
+          </div>
+        )
       )}
     </div>
   );

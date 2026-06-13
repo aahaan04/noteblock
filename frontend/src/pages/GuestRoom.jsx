@@ -534,14 +534,24 @@ export default function GuestRoom() {
 
       {/* ── Status area ── */}
       <div style={{ padding: '12px 16px 0' }}>
-        {venue.jukebox_paused && venue.queue_open_when_paused ? (
-          <div style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#34d399' }}>
-            <ListMusic size={16} style={{ flexShrink: 0 }} />
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>{t.queuingMode}</div>
-              <div style={{ fontSize: 12, color: '#6ee7b7' }}>{t.queuingModeMsg}</div>
+        {venue.jukebox_paused ? (
+          venue.queue_open_when_paused ? (
+            <div style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Pause size={24} color="#34d399" style={{ flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.jukeboxOff}</div>
+                <div style={{ fontSize: 12, color: '#6ee7b7' }}>{t.queuingModeMsg}</div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Pause size={24} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.jukeboxOff}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t.jukeboxOffMsg}</div>
+              </div>
+            </div>
+          )
         ) : (
           <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} />
         )}
