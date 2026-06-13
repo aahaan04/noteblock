@@ -295,7 +295,6 @@ export default function GuestRoom() {
   const [settingsName, setSettingsName] = useState(profile?.display_name ?? '');
   const [nameSaved, setNameSaved] = useState(false);
   const prevCreditsRef = useRef(null);
-  const jukeboxPausedSinceRef = useRef(0); // timestamp when jukebox_paused last became true
 
   // Redirect to join if not authenticated
   useEffect(() => {
@@ -347,7 +346,6 @@ export default function GuestRoom() {
   async function loadVenue() {
     try {
       const v = await api.venues.getByCode(roomCode);
-      if (v.jukebox_paused) jukeboxPausedSinceRef.current = Date.now();
       setVenue(v);
       loadQueue(v.id);
       loadBanned(v.id);
@@ -361,19 +359,11 @@ export default function GuestRoom() {
     setQueue(q);
   }
 
+  // getByCode (REST → DB) is the single authoritative source of venue state.
   async function refreshVenue() {
     try {
       const v = await api.venues.getByCode(roomCode);
-      setVenue(current => {
-        // Suppress a poll that flips paused→false within 8s of it being set to true.
-        // This covers Supabase read-replica lag: realtime reads the primary (instant)
-        // but REST API reads a replica that can lag several seconds behind.
-        if (current?.jukebox_paused && !v.jukebox_paused) {
-          if (Date.now() - jukeboxPausedSinceRef.current < 8000) return current;
-        }
-        if (v.jukebox_paused) jukeboxPausedSinceRef.current = Date.now();
-        return v;
-      });
+      setVenue(v);
     } catch {}
   }
 
@@ -399,9 +389,9 @@ export default function GuestRoom() {
       .channel(`guest-venue-${venue.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues' },
         (payload) => {
-          if (payload.new?.id !== venue.id) return;
-          if (payload.new?.jukebox_paused) jukeboxPausedSinceRef.current = Date.now();
-          setVenue(payload.new);
+          // Don't trust payload.new — a partial host update (e.g. vibe_now_playing)
+          // can carry a stale jukebox_paused and clobber the banner. Re-fetch instead.
+          if (payload.new?.id === venue.id) refreshVenue();
         })
       .subscribe();
     const poll = setInterval(() => { loadQueue(venue.id); refreshVenue(); }, 3000);
