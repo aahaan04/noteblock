@@ -13,7 +13,7 @@ create table public.users (
   display_name text,
   role text check (role in ('host', 'guest')) not null default 'guest',
   credits_balance integer not null default 0,
-  language text check (language in ('en', 'hi')) not null default 'en',
+  language text check (language in ('en', 'hi', 'zh')) not null default 'en',
   created_at timestamptz default now()
 );
 
@@ -31,6 +31,11 @@ create table public.venues (
   vibe_mode_enabled boolean not null default false,
   vibe_current_video_index integer not null default 0,
   vibe_current_position_seconds float not null default 0,
+  jukebox_paused boolean not null default false,
+  queue_open_when_paused boolean not null default false,
+  vibe_played_video_ids text[] default '{}',
+  vibe_now_playing_title text,
+  vibe_now_playing_channel text,
   created_at timestamptz default now()
 );
 
@@ -58,6 +63,14 @@ create table public.banned_songs (
   unique(venue_id, youtube_video_id)
 );
 
+create table public.banned_users (
+  id uuid default uuid_generate_v4() primary key,
+  venue_id uuid references public.venues(id) on delete cascade not null,
+  requester_name text not null,
+  banned_at timestamptz default now(),
+  unique(venue_id, requester_name)
+);
+
 create table public.saved_rooms (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references public.users(id) on delete cascade not null,
@@ -70,7 +83,7 @@ create table public.credit_transactions (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references public.users(id) on delete set null,
   amount integer not null,
-  type text check (type in ('purchase', 'gift', 'spend', 'welcome')) not null,
+  type text check (type in ('purchase', 'gift', 'spend', 'welcome', 'refund')) not null,
   razorpay_order_id text,
   description text,
   created_at timestamptz default now()
@@ -84,6 +97,7 @@ alter table public.users enable row level security;
 alter table public.venues enable row level security;
 alter table public.queue_items enable row level security;
 alter table public.banned_songs enable row level security;
+alter table public.banned_users enable row level security;
 alter table public.saved_rooms enable row level security;
 alter table public.credit_transactions enable row level security;
 
@@ -109,6 +123,12 @@ create policy "queue_host_delete" on public.queue_items for delete using (
 -- banned_songs
 create policy "banned_public_read" on public.banned_songs for select using (true);
 create policy "banned_host_all" on public.banned_songs for all using (
+  exists (select 1 from public.venues where id = venue_id and host_id = auth.uid())
+);
+
+-- banned_users
+create policy "banned_users_public_read" on public.banned_users for select using (true);
+create policy "banned_users_host_all" on public.banned_users for all using (
   exists (select 1 from public.venues where id = venue_id and host_id = auth.uid())
 );
 
@@ -274,6 +294,36 @@ begin
     (v_guest_id, p_amount, 'gift', 'Gift from host');
 
   return json_build_object('success', true, 'guest_id', v_guest_id);
+end;
+$$;
+
+-- Atomically refund credits (e.g. when a host removes a pending request)
+create or replace function refund_credits(
+  p_user_id uuid,
+  p_amount integer,
+  p_reason text default 'Refund'
+) returns json
+language plpgsql security definer as $$
+declare
+  v_new_balance integer;
+begin
+  if p_user_id is null or p_amount is null or p_amount <= 0 then
+    return json_build_object('success', false, 'error', 'invalid_args');
+  end if;
+
+  update public.users
+  set credits_balance = credits_balance + p_amount
+  where id = p_user_id
+  returning credits_balance into v_new_balance;
+
+  if v_new_balance is null then
+    return json_build_object('success', false, 'error', 'user_not_found');
+  end if;
+
+  insert into public.credit_transactions (user_id, amount, type, description)
+  values (p_user_id, p_amount, 'refund', p_reason);
+
+  return json_build_object('success', true, 'new_balance', v_new_balance);
 end;
 $$;
 

@@ -66,6 +66,10 @@ export default function VenueControl() {
     }
   }, [nowPlaying?.videoId]); // eslint-disable-line
 
+  // Keep latest token reachable from realtime callbacks (which capture [id] only).
+  const tokenRef = useRef(token);
+  useEffect(() => { tokenRef.current = token; }, [token]);
+
   async function loadVenue() {
     try {
       const v = await api.venues.get(id, token);
@@ -74,6 +78,10 @@ export default function VenueControl() {
       if (v.vibe_played_video_ids?.length) setVibePlayedIds(v.vibe_played_video_ids);
       if (v.vibe_mode_enabled) loadVibeVideos(v);
     } catch { navigate('/host/dashboard'); }
+  }
+  // Lightweight venue re-fetch (no vibe-playlist reload) for realtime updates.
+  async function refetchVenue() {
+    try { const v = await api.venues.get(id, tokenRef.current); setVenue(v); } catch {}
   }
   async function loadQueue() {
     try { const q = await api.queue.list(id); setQueue(q); } catch {}
@@ -105,7 +113,7 @@ export default function VenueControl() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_items', filter: `venue_id=eq.${id}` }, () => loadQueue())
       .subscribe();
     const vSub = supabase.channel(`venue-${id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues', filter: `id=eq.${id}` }, ({ new: u }) => setVenue(u))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues', filter: `id=eq.${id}` }, () => refetchVenue())
       .subscribe();
     return () => { supabase.removeChannel(qSub); supabase.removeChannel(vSub); };
   }, [id]);

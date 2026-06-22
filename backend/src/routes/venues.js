@@ -154,32 +154,30 @@ router.post('/:id/gift', requireAuth, async (req, res) => {
   if (!guest_identifier || !amount) {
     return res.status(400).json({ error: 'guest_identifier and amount required' });
   }
-
-  // Verify host owns this venue
-  const { data: venue } = await supabaseAdmin
-    .from('venues').select('id')
-    .eq('id', req.params.id).eq('host_id', req.user.id).single();
-  if (!venue) return res.status(403).json({ error: 'Forbidden' });
-
-  // Find the recipient by display_name (table is 'users', not 'profiles')
-  const { data: profile } = await supabaseAdmin
-    .from('users')
-    .select('id, credits_balance')
-    .eq('display_name', guest_identifier)
-    .maybeSingle();
-
-  if (!profile) {
-    return res.status(404).json({ error: 'user_not_found', message: `No signed-in user with name "${guest_identifier}" found. Guest users cannot receive gifted credits.` });
+  const amt = Number(amount);
+  if (!Number.isFinite(amt) || amt < 1) {
+    return res.status(400).json({ error: 'invalid_amount' });
   }
 
-  const newBalance = (profile.credits_balance ?? 0) + Number(amount);
-  const { error: updateErr } = await supabaseAdmin
-    .from('users')
-    .update({ credits_balance: newBalance })
-    .eq('id', profile.id);
+  // Atomic, ownership-checked gift via stored procedure. Doing the balance
+  // change in SQL avoids a read-modify-write that could lose a concurrent
+  // charge, and the RPC's lookup (limit 1) tolerates duplicate display names.
+  const { data, error } = await supabaseAdmin.rpc('gift_credits', {
+    p_host_id: req.user.id,
+    p_guest_identifier: guest_identifier,
+    p_amount: amt,
+    p_venue_id: req.params.id,
+  });
 
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
-  res.json({ success: true, new_balance: newBalance });
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data?.success) {
+    if (data?.error === 'guest_not_found') {
+      return res.status(404).json({ error: 'user_not_found', message: `No signed-in user with name "${guest_identifier}" found. Guest users cannot receive gifted credits.` });
+    }
+    if (data?.error === 'unauthorized') return res.status(403).json({ error: 'Forbidden' });
+    return res.status(400).json({ error: data?.error ?? 'gift_failed' });
+  }
+  res.json({ success: true });
 });
 
 // GET /api/venues/:id/users — list requesters with stats + ban status
@@ -237,6 +235,15 @@ router.delete('/:id/users/:name', requireAuth, async (req, res) => {
 
   const name = decodeURIComponent(req.params.name);
 
+  // Snapshot this user's pending requests first so we can refund their credits
+  // (consistent with removing a single song via the queue cross button).
+  const { data: pendingItems } = await supabaseAdmin
+    .from('queue_items')
+    .select('user_id, credits_charged')
+    .eq('venue_id', req.params.id)
+    .eq('requester_name', name)
+    .eq('status', 'pending');
+
   // Delete all non-playing items for this user.
   // supabaseAdmin (service role) bypasses RLS so this always works.
   const { error } = await supabaseAdmin
@@ -247,7 +254,21 @@ router.delete('/:id/users/:name', requireAuth, async (req, res) => {
     .neq('status', 'playing'); // leave the currently-playing song alone
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
+
+  // Refund the credits spent on the pending requests we just cleared.
+  let refunded = 0;
+  for (const it of pendingItems ?? []) {
+    if (it.user_id && it.credits_charged > 0) {
+      const { data, error: rErr } = await supabaseAdmin.rpc('refund_credits', {
+        p_user_id: it.user_id,
+        p_amount: it.credits_charged,
+        p_reason: 'Removed from venue by host',
+      });
+      if (!rErr && data?.success) refunded += it.credits_charged;
+    }
+  }
+
+  res.json({ success: true, refunded });
 });
 
 // POST /api/venues/:id/banned-users — ban a user by name

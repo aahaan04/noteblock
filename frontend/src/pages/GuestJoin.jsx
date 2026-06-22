@@ -51,11 +51,17 @@ export default function GuestJoin() {
     // Already logged in (returning user OR just clicked magic link)
     if (joinedRef.current) return;
 
+    // A freshly-created profile defaults its name to the email prefix (or "User").
+    // Prompt those users to pick a real name — but once they've confirmed a name
+    // we remember it (per user, locally) so a returning user whose chosen name
+    // happens to equal their email prefix isn't asked again on every visit.
     const emailPrefix = profile?.email?.split('@')[0] ?? '';
-    const needsName =
+    const alreadyNamed = profile?.id && localStorage.getItem(`nb_named_${profile.id}`) === '1';
+    const looksDefault =
       !profile?.display_name ||
       profile.display_name === emailPrefix ||
       profile.display_name === 'User';
+    const needsName = looksDefault && !alreadyNamed;
 
     if (needsName) {
       setDisplayName('');
@@ -98,6 +104,9 @@ export default function GuestJoin() {
       const { data: { session } } = await supabase.auth.getSession();
       const tok = session?.access_token ?? token;
       await api.users.updateProfile({ display_name: name }, tok);
+      // Remember that this user has confirmed a display name so we don't
+      // re-prompt them on future joins (even if it matches their email prefix).
+      if (profile?.id) localStorage.setItem(`nb_named_${profile.id}`, '1');
       await refreshProfile();
       await joinRoom();
     } catch (err) {

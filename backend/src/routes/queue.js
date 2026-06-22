@@ -158,30 +158,31 @@ router.delete('/:itemId', requireAuth, async (req, res) => {
     .eq('venue_id', req.params.venueId)
     .single();
 
-  const { error } = await supabaseAdmin
+  // Only transition rows that aren't already removed. This makes the operation
+  // idempotent: a double-click / concurrent delete on the same item flips it
+  // once, and the second call updates 0 rows — so we never double-refund.
+  const { data: removed, error } = await supabaseAdmin
     .from('queue_items')
     .update({ status: 'removed' })
     .eq('id', req.params.itemId)
-    .eq('venue_id', req.params.venueId);
+    .eq('venue_id', req.params.venueId)
+    .neq('status', 'removed')
+    .select('id');
 
   if (error) return res.status(500).json({ error: error.message });
 
-  // Refund credits to the requester if the song hadn't started playing yet
-  if (item?.status === 'pending' && item.user_id && item.credits_charged > 0) {
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('credits_balance')
-      .eq('id', item.user_id)
-      .single();
-    if (user) {
-      await supabaseAdmin
-        .from('users')
-        .update({ credits_balance: (user.credits_balance ?? 0) + item.credits_charged })
-        .eq('id', item.user_id);
-    }
+  // Refund only if THIS call is the one that removed a still-pending request.
+  let refunded = 0;
+  if (removed?.length && item?.status === 'pending' && item.user_id && item.credits_charged > 0) {
+    const { data, error: refundErr } = await supabaseAdmin.rpc('refund_credits', {
+      p_user_id: item.user_id,
+      p_amount: item.credits_charged,
+      p_reason: 'Song removed from queue',
+    });
+    if (!refundErr && data?.success) refunded = item.credits_charged;
   }
 
-  res.json({ success: true, refunded: item?.status === 'pending' && item?.credits_charged > 0 ? item.credits_charged : 0 });
+  res.json({ success: true, refunded });
 });
 
 export default router;
