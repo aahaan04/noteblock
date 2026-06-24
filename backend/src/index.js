@@ -44,18 +44,25 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// ── CORS — restrict to known origins ─────────────────────────────────────────
-const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
+// ── CORS — API routes only ────────────────────────────────────────────────────
+// Static files must NOT go through CORS middleware: Vite's <script type="module"
+// crossorigin> causes the browser to fetch the JS bundle in CORS mode. If the
+// middleware blocks it (origin not in allowlist), the bundle never loads.
+// The API uses Bearer token auth (not cookies), so same-origin enforcement is
+// already provided by the JS same-origin policy on localStorage.
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
   .split(',').map(s => s.trim()).filter(Boolean);
 
-app.use(cors({
+const corsMiddleware = cors({
   origin(origin, cb) {
-    // No origin = same-origin or non-browser (Postman, health checks) — allow
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    // No origin = navigation / server-to-server — allow
+    if (!origin) return cb(null, true);
+    // If ALLOWED_ORIGINS is configured, enforce it; otherwise allow all
+    if (!allowedOrigins.length || allowedOrigins.includes(origin)) return cb(null, true);
     cb(new Error(`CORS: ${origin} not allowed`));
   },
   credentials: true,
-}));
+});
 
 // ── Request body size limit ───────────────────────────────────────────────────
 app.use(express.json({ limit: '64kb' }));
@@ -66,12 +73,12 @@ app.use('/api', globalLimiter);
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'noteblock-api' }));
 
-// API routes
-app.use('/api/venues', venuesRouter);
-app.use('/api/venues/:venueId/queue', queueRouter);
-app.use('/api/youtube', youtubeRouter);
-app.use('/api/users', usersRouter);
-app.use('/api/credits', creditsRouter);
+// API routes — CORS applied here only, not to static files
+app.use('/api/venues', corsMiddleware, venuesRouter);
+app.use('/api/venues/:venueId/queue', corsMiddleware, queueRouter);
+app.use('/api/youtube', corsMiddleware, youtubeRouter);
+app.use('/api/users', corsMiddleware, usersRouter);
+app.use('/api/credits', corsMiddleware, creditsRouter);
 
 // ── Serve built frontend (production) ────────────────────────────────────────
 const frontendDist = join(__dirname, '../../frontend/dist');
