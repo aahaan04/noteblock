@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { creditLimiter } from '../middleware/rateLimits.js';
 
 const router = Router();
 
@@ -21,7 +22,7 @@ router.get('/packages', (_req, res) => {
 
 // POST /api/credits/purchase-intent
 // Creates a Razorpay order (stub — returns placeholder until Razorpay is configured)
-router.post('/purchase-intent', requireAuth, async (req, res) => {
+router.post('/purchase-intent', requireAuth, creditLimiter, async (req, res) => {
   const { package_id } = req.body;
   const pkg = PACKAGES.find(p => p.id === package_id);
   if (!pkg) return res.status(400).json({ error: 'Invalid package' });

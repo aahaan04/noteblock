@@ -32,7 +32,7 @@ import SongSearch from '../components/SongSearch.jsx';
 
 export default function VenueControl() {
   const { id } = useParams();
-  const { token } = useAuth();
+  const { token, signOut } = useAuth();
   const { t } = useLang();
   const navigate = useNavigate();
   const playerRef = useRef(null);
@@ -69,6 +69,29 @@ export default function VenueControl() {
   // Keep latest token reachable from realtime callbacks (which capture [id] only).
   const tokenRef = useRef(token);
   useEffect(() => { tokenRef.current = token; }, [token]);
+
+  // Sign out host after 4 hours of inactivity
+  const inactivityTimerRef = useRef(null);
+  useEffect(() => {
+    const TIMEOUT_MS = 4 * 60 * 60 * 1000;
+    const reset = () => {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = setTimeout(() => {
+        signOut();
+        navigate('/host/login');
+      }, TIMEOUT_MS);
+    };
+    reset();
+    window.addEventListener('mousemove', reset);
+    window.addEventListener('keydown', reset);
+    window.addEventListener('click', reset);
+    return () => {
+      clearTimeout(inactivityTimerRef.current);
+      window.removeEventListener('mousemove', reset);
+      window.removeEventListener('keydown', reset);
+      window.removeEventListener('click', reset);
+    };
+  }, []); // eslint-disable-line
 
   async function loadVenue() {
     try {

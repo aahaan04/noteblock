@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
+import { body, schemas } from '../middleware/validate.js';
+import { queueLimiter } from '../middleware/rateLimits.js';
 
 const router = Router({ mergeParams: true }); // gets :venueId from parent
 
@@ -22,7 +24,10 @@ router.get('/', async (req, res) => {
     .order('play_type', { ascending: false }) // quick before normal
     .order('requested_at', { ascending: true });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[queue/list]', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   res.json(data);
 });
 
@@ -38,7 +43,7 @@ router.get('/price', async (req, res) => {
 });
 
 // POST /api/venues/:venueId/queue — add song to queue (requires auth)
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, queueLimiter, body(schemas.addQueue), async (req, res) => {
   const {
     youtube_video_id,
     song_title,
@@ -46,13 +51,6 @@ router.post('/', requireAuth, async (req, res) => {
     play_type = 'normal',
     requester_name = 'Guest',
   } = req.body;
-
-  if (!youtube_video_id || !song_title) {
-    return res.status(400).json({ error: 'video_id and title required' });
-  }
-  if (!['normal', 'quick'].includes(play_type)) {
-    return res.status(400).json({ error: 'Invalid play_type' });
-  }
 
   // Check venue is active and not paused
   const { data: venueCheck } = await supabaseAdmin
@@ -62,6 +60,18 @@ router.post('/', requireAuth, async (req, res) => {
   }
   if (venueCheck.jukebox_paused && !venueCheck.queue_open_when_paused) {
     return res.status(400).json({ error: 'jukebox_paused' });
+  }
+
+  // Prevent duplicate: same user queuing the same video while it's still pending/playing
+  const { count: dupCount } = await supabaseAdmin
+    .from('queue_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('venue_id', req.params.venueId)
+    .eq('user_id', req.user.id)
+    .eq('youtube_video_id', youtube_video_id)
+    .in('status', ['pending', 'playing']);
+  if (dupCount > 0) {
+    return res.status(400).json({ error: 'already_queued' });
   }
 
   // Check if requester is banned
@@ -96,17 +106,17 @@ router.post('/', requireAuth, async (req, res) => {
     p_credits_to_charge: credits_to_charge,
   });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[queue/add]', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   if (!data.success) return res.status(400).json({ error: data.error, credits_needed: credits_to_charge });
   return res.status(201).json({ success: true, queue_item_id: data.queue_item_id, credits_charged: credits_to_charge });
 });
 
 // PATCH /api/venues/:venueId/queue/:itemId — update status (host only)
-router.patch('/:itemId', requireAuth, async (req, res) => {
+router.patch('/:itemId', requireAuth, body(schemas.updateQueueStatus), async (req, res) => {
   const { status } = req.body;
-  if (!['playing', 'played', 'removed'].includes(status)) {
-    return res.status(400).json({ error: 'Invalid status' });
-  }
 
   // Verify ownership via venue
   const { data: venue } = await supabaseAdmin
@@ -117,15 +127,14 @@ router.patch('/:itemId', requireAuth, async (req, res) => {
     .single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
-  // When marking a new song as 'playing', auto-retire any other songs that are
-  // still stuck in 'playing' state (handles host browser crash / missed callbacks)
+  // When marking a new song as 'playing', auto-retire any stuck songs
   if (status === 'playing') {
     await supabaseAdmin
       .from('queue_items')
       .update({ status: 'played' })
       .eq('venue_id', req.params.venueId)
       .eq('status', 'playing')
-      .neq('id', req.params.itemId); // don't touch the one we're about to mark
+      .neq('id', req.params.itemId);
   }
 
   const { data, error } = await supabaseAdmin
@@ -136,11 +145,14 @@ router.patch('/:itemId', requireAuth, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[queue/patch]', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   res.json(data);
 });
 
-// DELETE /api/venues/:venueId/queue/:itemId — remove (host only), refunds credits if pending
+// DELETE /api/venues/:venueId/queue/:itemId — remove (host only), refunds if pending
 router.delete('/:itemId', requireAuth, async (req, res) => {
   const { data: venue } = await supabaseAdmin
     .from('venues')
@@ -150,7 +162,7 @@ router.delete('/:itemId', requireAuth, async (req, res) => {
     .single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
-  // Fetch item before removal so we can refund if it was pending
+  // Snapshot item before removal to enable refund
   const { data: item } = await supabaseAdmin
     .from('queue_items')
     .select('status, credits_charged, user_id')
@@ -158,9 +170,7 @@ router.delete('/:itemId', requireAuth, async (req, res) => {
     .eq('venue_id', req.params.venueId)
     .single();
 
-  // Only transition rows that aren't already removed. This makes the operation
-  // idempotent: a double-click / concurrent delete on the same item flips it
-  // once, and the second call updates 0 rows — so we never double-refund.
+  // Idempotent: only transitions rows not already removed — prevents double-refund
   const { data: removed, error } = await supabaseAdmin
     .from('queue_items')
     .update({ status: 'removed' })
@@ -169,9 +179,11 @@ router.delete('/:itemId', requireAuth, async (req, res) => {
     .neq('status', 'removed')
     .select('id');
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[queue/delete]', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 
-  // Refund only if THIS call is the one that removed a still-pending request.
   let refunded = 0;
   if (removed?.length && item?.status === 'pending' && item.user_id && item.credits_charged > 0) {
     const { data, error: refundErr } = await supabaseAdmin.rpc('refund_credits', {

@@ -2,8 +2,14 @@ import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { requireAuth, requireHost } from '../middleware/auth.js';
+import { body, schemas } from '../middleware/validate.js';
 
 const router = Router();
+
+const dbErr = (label, err, res) => {
+  console.error(`[venues/${label}]`, err.message);
+  return res.status(500).json({ error: 'Internal server error' });
+};
 
 // GET /api/venues — host's own venues
 router.get('/', requireAuth, async (req, res) => {
@@ -13,16 +19,19 @@ router.get('/', requireAuth, async (req, res) => {
     .eq('host_id', req.user.id)
     .order('created_at', { ascending: false });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return dbErr('list', error, res);
   res.json(data);
 });
 
 // GET /api/venues/room/:roomCode — public venue info for guests
 router.get('/room/:roomCode', async (req, res) => {
+  const code = req.params.roomCode;
+  if (!code || code.length > 20) return res.status(400).json({ error: 'Invalid room code' });
+
   const { data, error } = await supabaseAdmin
     .from('venues')
     .select('id, name, room_code, status, welcome_credits, vibe_mode_enabled, jukebox_paused, queue_open_when_paused, vibe_description, vibe_now_playing_title, vibe_now_playing_channel')
-    .eq('room_code', req.params.roomCode)
+    .eq('room_code', code)
     .single();
 
   if (error || !data) return res.status(404).json({ error: 'Venue not found' });
@@ -43,17 +52,15 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/venues — create venue (host only)
-router.post('/', requireHost, async (req, res) => {
+router.post('/', requireHost, body(schemas.createVenue), async (req, res) => {
   const { name, welcome_credits = 10, crossfade_duration_seconds = 5 } = req.body;
-  if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
-
   const room_code = nanoid(8).toUpperCase();
 
   const { data, error } = await supabaseAdmin
     .from('venues')
     .insert({
       host_id: req.user.id,
-      name: name.trim(),
+      name,
       room_code,
       welcome_credits,
       crossfade_duration_seconds,
@@ -61,12 +68,12 @@ router.post('/', requireHost, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return dbErr('create', error, res);
   res.status(201).json(data);
 });
 
 // PUT /api/venues/:id — update venue settings (host only)
-router.put('/:id', requireAuth, async (req, res) => {
+router.put('/:id', requireAuth, body(schemas.updateVenue), async (req, res) => {
   const allowed = [
     'name', 'status', 'welcome_credits', 'crossfade_duration_seconds',
     'vibe_description', 'vibe_playlist_urls', 'vibe_mode_enabled',
@@ -87,12 +94,12 @@ router.put('/:id', requireAuth, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return dbErr('update', error, res);
   if (!data) return res.status(404).json({ error: 'Venue not found' });
   res.json(data);
 });
 
-// GET /api/venues/:id/banned — list banned songs
+// GET /api/venues/:id/banned — list banned songs (public; used by guest to filter results)
 router.get('/:id/banned', async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('banned_songs')
@@ -100,16 +107,14 @@ router.get('/:id/banned', async (req, res) => {
     .eq('venue_id', req.params.id)
     .order('banned_at', { ascending: false });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return dbErr('banned/list', error, res);
   res.json(data);
 });
 
 // POST /api/venues/:id/banned — ban a song (host only)
-router.post('/:id/banned', requireAuth, async (req, res) => {
+router.post('/:id/banned', requireAuth, body(schemas.banSong), async (req, res) => {
   const { youtube_video_id, song_title, thumbnail_url } = req.body;
-  if (!youtube_video_id) return res.status(400).json({ error: 'video_id required' });
 
-  // Verify ownership
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('id')
@@ -124,7 +129,7 @@ router.post('/:id/banned', requireAuth, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return dbErr('banned/add', error, res);
   res.status(201).json(data);
 });
 
@@ -144,32 +149,25 @@ router.delete('/:id/banned/:songId', requireAuth, async (req, res) => {
     .eq('id', req.params.songId)
     .eq('venue_id', req.params.id);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return dbErr('banned/remove', error, res);
   res.json({ success: true });
 });
 
 // POST /api/venues/:id/gift — gift credits to a signed-in user (host only)
-router.post('/:id/gift', requireAuth, async (req, res) => {
+router.post('/:id/gift', requireAuth, body(schemas.gift), async (req, res) => {
   const { guest_identifier, amount } = req.body;
-  if (!guest_identifier || !amount) {
-    return res.status(400).json({ error: 'guest_identifier and amount required' });
-  }
-  const amt = Number(amount);
-  if (!Number.isFinite(amt) || amt < 1) {
-    return res.status(400).json({ error: 'invalid_amount' });
-  }
 
-  // Atomic, ownership-checked gift via stored procedure. Doing the balance
-  // change in SQL avoids a read-modify-write that could lose a concurrent
-  // charge, and the RPC's lookup (limit 1) tolerates duplicate display names.
   const { data, error } = await supabaseAdmin.rpc('gift_credits', {
     p_host_id: req.user.id,
     p_guest_identifier: guest_identifier,
-    p_amount: amt,
+    p_amount: amount,
     p_venue_id: req.params.id,
   });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[venues/gift]', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   if (!data?.success) {
     if (data?.error === 'guest_not_found') {
       return res.status(404).json({ error: 'user_not_found', message: `No signed-in user with name "${guest_identifier}" found. Guest users cannot receive gifted credits.` });
@@ -198,7 +196,6 @@ router.get('/:id/users', requireAuth, async (req, res) => {
 
   const bannedNames = new Set((bannedUsers ?? []).map(b => b.requester_name));
 
-  // Group by requester_name
   const userMap = {};
   for (const item of items ?? []) {
     const name = item.requester_name || 'Guest';
@@ -208,7 +205,6 @@ router.get('/:id/users', requireAuth, async (req, res) => {
     if (item.requested_at > userMap[name].lastSeen) userMap[name].lastSeen = item.requested_at;
   }
 
-  // Cross-reference with profiles to identify signed-in users
   const requesterNames = Object.keys(userMap);
   let registeredNames = new Set();
   if (requesterNames.length) {
@@ -226,7 +222,7 @@ router.get('/:id/users', requireAuth, async (req, res) => {
   res.json({ users, bannedUsers: bannedUsers ?? [] });
 });
 
-// DELETE /api/venues/:id/users/:name — remove user (clears their pending requests, no ban)
+// DELETE /api/venues/:id/users/:name — remove user (clears pending requests + refunds)
 router.delete('/:id/users/:name', requireAuth, async (req, res) => {
   const { data: venue } = await supabaseAdmin
     .from('venues').select('id')
@@ -235,8 +231,6 @@ router.delete('/:id/users/:name', requireAuth, async (req, res) => {
 
   const name = decodeURIComponent(req.params.name);
 
-  // Snapshot this user's pending requests first so we can refund their credits
-  // (consistent with removing a single song via the queue cross button).
   const { data: pendingItems } = await supabaseAdmin
     .from('queue_items')
     .select('user_id, credits_charged')
@@ -244,18 +238,15 @@ router.delete('/:id/users/:name', requireAuth, async (req, res) => {
     .eq('requester_name', name)
     .eq('status', 'pending');
 
-  // Delete all non-playing items for this user.
-  // supabaseAdmin (service role) bypasses RLS so this always works.
   const { error } = await supabaseAdmin
     .from('queue_items')
     .delete()
     .eq('venue_id', req.params.id)
     .eq('requester_name', name)
-    .neq('status', 'playing'); // leave the currently-playing song alone
+    .neq('status', 'playing');
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return dbErr('users/remove', error, res);
 
-  // Refund the credits spent on the pending requests we just cleared.
   let refunded = 0;
   for (const it of pendingItems ?? []) {
     if (it.user_id && it.credits_charged > 0) {
@@ -272,9 +263,8 @@ router.delete('/:id/users/:name', requireAuth, async (req, res) => {
 });
 
 // POST /api/venues/:id/banned-users — ban a user by name
-router.post('/:id/banned-users', requireAuth, async (req, res) => {
+router.post('/:id/banned-users', requireAuth, body(schemas.banUser), async (req, res) => {
   const { requester_name } = req.body;
-  if (!requester_name) return res.status(400).json({ error: 'requester_name required' });
 
   const { data: venue } = await supabaseAdmin.from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
@@ -284,7 +274,7 @@ router.post('/:id/banned-users', requireAuth, async (req, res) => {
     .upsert({ venue_id: req.params.id, requester_name }, { onConflict: 'venue_id,requester_name' })
     .select().single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return dbErr('banned-users/add', error, res);
   res.status(201).json(data);
 });
 
@@ -299,7 +289,7 @@ router.delete('/:id/banned-users/:bannedUserId', requireAuth, async (req, res) =
     .eq('id', req.params.bannedUserId)
     .eq('venue_id', req.params.id);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return dbErr('banned-users/remove', error, res);
   res.json({ success: true });
 });
 
@@ -326,7 +316,6 @@ router.get('/:id/stats', requireAuth, async (req, res) => {
   const totalRequests = items?.length ?? 0;
   const totalCredits = items?.reduce((s, i) => s + (i.credits_charged || 0), 0) ?? 0;
 
-  // Top songs
   const songCount = {};
   for (const item of items ?? []) {
     const key = item.youtube_video_id;

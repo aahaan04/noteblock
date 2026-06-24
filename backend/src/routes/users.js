@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
+import { body, schemas } from '../middleware/validate.js';
 
 const router = Router();
 
@@ -12,17 +13,24 @@ router.get('/profile', requireAuth, async (req, res) => {
     .eq('id', req.user.id)
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[users/profile GET]', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   res.json(data);
 });
 
 // PUT /api/users/profile
-router.put('/profile', requireAuth, async (req, res) => {
-  const { display_name, language, role } = req.body;
+// NOTE: 'role' is intentionally not accepted here — privilege escalation prevention.
+router.put('/profile', requireAuth, body(schemas.updateProfile), async (req, res) => {
+  const { display_name, language } = req.body;
   const updates = {};
   if (display_name !== undefined) updates.display_name = display_name;
   if (language !== undefined) updates.language = language;
-  if (role !== undefined) updates.role = role;
+
+  if (!Object.keys(updates).length) {
+    return res.status(400).json({ error: 'Nothing to update' });
+  }
 
   const { data, error } = await supabaseAdmin
     .from('users')
@@ -31,7 +39,10 @@ router.put('/profile', requireAuth, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[users/profile PUT]', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   res.json(data);
 });
 
@@ -43,7 +54,10 @@ router.get('/saved-rooms', requireAuth, async (req, res) => {
     .eq('user_id', req.user.id)
     .order('last_joined_at', { ascending: false });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[users/saved-rooms]', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   res.json(data);
 });
 
@@ -54,7 +68,10 @@ router.post('/welcome/:venueId', requireAuth, async (req, res) => {
     p_venue_id: req.params.venueId,
   });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[users/welcome]', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   res.json(data);
 });
 
