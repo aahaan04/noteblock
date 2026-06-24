@@ -577,7 +577,7 @@ export default function GuestRoom() {
           </div>
 
           <div style={{ padding: '16px' }}>
-            {tab === 'search' && <SongSearch bannedIds={bannedIds} onSelect={handleSelect} vibeDescription={venue.vibe_description ?? ''} />}
+            {tab === 'search' && <SongSearch bannedIds={bannedIds} onSelect={handleSelect} vibeDescription={venue.vibe_mode_enabled ? (venue.vibe_description ?? '') : ''} />}
             {tab === 'queue' && <QueueDisplay items={queue} isHost={false} />}
             {tab === 'history' && (
               <div>

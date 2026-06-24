@@ -113,8 +113,8 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
         </div>
       )}
 
-      {/* Vibe suggestions */}
-      {vibeDescription && (
+      {/* Vibe suggestions — only render when loading or there are results */}
+      {vibeDescription && (suggestionsLoading || suggestions.length > 0) && (
         <div style={{ marginTop: query && results.length ? 20 : 0 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
@@ -126,9 +126,6 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
           </div>
           {suggestionsLoading && (
             <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: '8px 0' }}>{t.searching}</div>
-          )}
-          {!suggestionsLoading && suggestions.length === 0 && (
-            <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>No suggestions available</div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {suggestions.map(r => (
