@@ -44,7 +44,10 @@ export default function HostDashboard() {
   async function loadVenues() {
     setLoading(true);
     const { data, error } = await supabase
-      .from('venues').select('*').eq('host_id', user.id).order('created_at', { ascending: false });
+      .from('venues')
+      .select('id, host_id, name, room_code, status')
+      .eq('host_id', user.id)
+      .order('created_at', { ascending: false });
     if (!error) setVenues(data ?? []);
     setLoading(false);
   }
@@ -155,7 +158,7 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobi
   async function toggleStatus() {
     setToggling(true);
     const newStatus = venue.status === 'active' ? 'closed' : 'active';
-    const { data } = await supabase.from('venues').update({ status: newStatus }).eq('id', venue.id).select().single();
+    const { data } = await supabase.from('venues').update({ status: newStatus }).eq('id', venue.id).select('id, host_id, name, room_code, status').single();
     if (data) onStatusChange(data);
     setToggling(false);
   }

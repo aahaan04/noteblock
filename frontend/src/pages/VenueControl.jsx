@@ -225,7 +225,11 @@ export default function VenueControl() {
     playerRef.current?.skip();
     setTimeout(() => setSkipping(false), 2500);
   }
-  async function handleRemove(itemId) { await api.queue.remove(id, itemId, token).catch(() => {}); }
+  // Stable reference so React.memo(QueueDisplay/QueueItem) can skip re-renders
+  // when VenueControl re-renders for unrelated reasons (nowPlaying, venue, etc.).
+  const handleRemove = useCallback(async (itemId) => {
+    await api.queue.remove(id, itemId, token).catch(() => {});
+  }, [id, token]); // eslint-disable-line
   async function handleVenueUpdate(updates) {
     try {
       const updated = await api.venues.update(id, updates, token);
@@ -368,7 +372,7 @@ export default function VenueControl() {
   // Tab content
   const tabContent = (
     <>
-      {tab === 'queue'  && <QueueDisplay items={queue} isHost onRemove={handleRemove} onSkip={handleSkip} nowPlaying={nowPlaying} />}
+      {tab === 'queue'  && <QueueDisplay items={queue} isHost onRemove={handleRemove} />}
       {tab === 'vibe'   && <VibeSettings venue={venue} onUpdate={handleVenueUpdate} vibePlayedCount={vibePlayedIds.length} onResetVibeHistory={() => { setVibePlayedIds([]); handleVenueUpdate({ vibe_played_video_ids: [] }); }} />}
       {tab === 'ban'    && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />}
       {tab === 'users'  && <UsersPanel venueId={id} token={token} />}

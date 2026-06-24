@@ -1,38 +1,12 @@
+import { memo } from 'react';
 import { Zap, X, ListMusic } from 'lucide-react';
 import { useLang } from '../context/LangContext.jsx';
 
 const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
-export default function QueueDisplay({ items, isHost, onRemove, onSkip, nowPlaying }) {
-  const { t } = useLang();
-
-  const pending = items.filter(i => i.status === 'pending');
-
-  if (!pending.length) {
-    return (
-      <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-        <ListMusic size={48} color="var(--border)" style={{ marginBottom: 12 }} />
-        <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t.emptyQueue}</div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {pending.map((item, idx) => (
-        <QueueItem
-          key={item.id}
-          item={item}
-          position={idx + 1}
-          isHost={isHost}
-          onRemove={onRemove}
-        />
-      ))}
-    </div>
-  );
-}
-
-function QueueItem({ item, position, isHost, onRemove }) {
+// Memoised: skips re-renders when parent re-renders but item data hasn't changed
+// (e.g. when a song's play-position/volume changes inside CrossfadePlayer).
+const QueueItem = memo(function QueueItem({ item, position, isHost, onRemove }) {
   const { t } = useLang();
   const isQuick = item.play_type === 'quick';
 
@@ -52,6 +26,7 @@ function QueueItem({ item, position, isHost, onRemove }) {
         <img
           src={item.thumbnail_url}
           alt=""
+          loading="lazy"
           style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
         />
       )}
@@ -92,4 +67,36 @@ function QueueItem({ item, position, isHost, onRemove }) {
       </div>
     </div>
   );
-}
+});
+
+// Memoised: only re-renders when the queue array reference changes (i.e. after a
+// real-time queue fetch), not on unrelated VenueControl/GuestRoom state updates
+// such as nowPlaying, venue, or vibeActive changing.
+export default memo(function QueueDisplay({ items, isHost, onRemove }) {
+  const { t } = useLang();
+
+  const pending = items.filter(i => i.status === 'pending');
+
+  if (!pending.length) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+        <ListMusic size={48} color="var(--border)" style={{ marginBottom: 12 }} />
+        <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t.emptyQueue}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {pending.map((item, idx) => (
+        <QueueItem
+          key={item.id}
+          item={item}
+          position={idx + 1}
+          isHost={isHost}
+          onRemove={onRemove}
+        />
+      ))}
+    </div>
+  );
+});

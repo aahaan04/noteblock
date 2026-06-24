@@ -383,22 +383,24 @@ export default function GuestRoom() {
     if (!venue) return;
     const qSub = supabase
       .channel(`guest-queue-${venue.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_items' },
-        (payload) => {
-          const vid = payload.new?.venue_id ?? payload.old?.venue_id;
-          if (!vid || vid === venue.id) loadQueue(venue.id);
-        })
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'queue_items',
+        filter: `venue_id=eq.${venue.id}`,
+      }, () => loadQueue(venue.id))
       .subscribe();
     const vSub = supabase
       .channel(`guest-venue-${venue.id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues' },
-        (payload) => {
-          // Don't trust payload.new — a partial host update (e.g. vibe_now_playing)
-          // can carry a stale jukebox_paused and clobber the banner. Re-fetch instead.
-          if (payload.new?.id === venue.id) refreshVenue();
-        })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'venues',
+        filter: `id=eq.${venue.id}`,
+      }, () => {
+        // Don't trust payload.new — a partial host update (e.g. vibe_now_playing)
+        // can carry a stale jukebox_paused and clobber the banner. Re-fetch instead.
+        refreshVenue();
+      })
       .subscribe();
-    const poll = setInterval(() => { loadQueue(venue.id); refreshVenue(); }, 3000);
+    // 30-second fallback poll catches any subscription drops without hammering the API.
+    const poll = setInterval(() => { loadQueue(venue.id); refreshVenue(); }, 30000);
     return () => { supabase.removeChannel(qSub); supabase.removeChannel(vSub); clearInterval(poll); };
   }, [venue?.id]); // eslint-disable-line
 
@@ -597,7 +599,7 @@ export default function GuestRoom() {
                   )}
                   {sessionHistory.map((s, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' }}>
-                      {s.thumbnail && <img src={s.thumbnail} alt="" style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
+                      {s.thumbnail && <img src={s.thumbnail} alt="" loading="lazy" style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(s.title)}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>

@@ -40,7 +40,7 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await supabase
         .from('users')
-        .select('*')
+        .select('id, email, display_name, role, credits_balance, language')
         .eq('id', authUser.id)
         .maybeSingle();
 
@@ -111,7 +111,7 @@ export function AuthProvider({ children }) {
     if (!session?.user) return;
     const { data } = await supabase
       .from('users')
-      .select('*')
+      .select('id, email, display_name, role, credits_balance, language')
       .eq('id', session.user.id)
       .maybeSingle();
     if (data) setProfile(data);

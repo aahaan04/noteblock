@@ -14,13 +14,18 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const debounceRef = useRef(null);
+  const debounceRef  = useRef(null);
+  // Ref so the search callback and suggestions filter always see the latest banned set
+  // without needing bannedIds in their dependency arrays (which cleared the debounce timer
+  // on every ban event, interrupting an in-progress search).
+  const bannedIdsRef = useRef(bannedIds);
+  useEffect(() => { bannedIdsRef.current = bannedIds; }, [bannedIds]);
 
   useEffect(() => {
     if (!vibeDescription) return;
     setSuggestionsLoading(true);
     api.youtube.suggestions(vibeDescription)
-      .then(data => setSuggestions(data.filter(r => !bannedIds.has(r.videoId))))
+      .then(data => setSuggestions(data.filter(r => !bannedIdsRef.current.has(r.videoId))))
       .catch(() => setSuggestions([]))
       .finally(() => setSuggestionsLoading(false));
   }, [vibeDescription]); // eslint-disable-line
@@ -32,7 +37,7 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
       setLoading(true);
       try {
         const data = await api.youtube.search(q);
-        setResults(data.filter(r => !bannedIds.has(r.videoId)));
+        setResults(data.filter(r => !bannedIdsRef.current.has(r.videoId)));
         setVisibleCount(PAGE_SIZE);
       } catch {
         setResults([]);
@@ -40,7 +45,7 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
         setLoading(false);
       }
     }, 500);
-  }, [bannedIds]);
+  }, []); // eslint-disable-line — bannedIds accessed via ref, no timer-clearing on ban events
 
   const handleChange = (e) => {
     setQuery(e.target.value);
@@ -160,6 +165,7 @@ function SongCard({ song, onSelect, accent }) {
         <img
           src={song.thumbnail}
           alt=""
+          loading="lazy"
           style={{ width: 60, height: 45, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
         />
       )}
