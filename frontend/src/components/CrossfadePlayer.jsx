@@ -2,8 +2,9 @@ import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 're
 
 // ── Silent audio keep-alive for iOS Safari / mobile background tabs ───────────
 // iOS kills audio when the page is hidden unless an AudioContext is actively
-// running. We create a near-silent 1-second looping buffer to keep the audio
-// session alive. Must be started on first user gesture (iOS requirement).
+// running. A near-silent (not true-zero — some browsers kill a true-zero buffer)
+// 1-second looping buffer keeps the audio session alive. Must be triggered on
+// a genuine user gesture (iOS requirement).
 let sharedAudioCtx = null;
 let silentSource   = null;
 
@@ -15,8 +16,7 @@ function startSilentLoop() {
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
 
     const sampleRate = ctx.sampleRate;
-    const buffer = ctx.createBuffer(1, sampleRate, sampleRate); // 1-second silent buffer
-    // near-silent (not completely silent — some browsers kill a true-zero buffer)
+    const buffer = ctx.createBuffer(1, sampleRate, sampleRate); // 1-second buffer
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 0.000002 - 0.000001;
 
@@ -35,19 +35,14 @@ function resumeAudioCtx() {
   } catch {}
 }
 
-// ── Web Lock API keep-alive ───────────────────────────────────────────────────
-// Requests a Web Lock that never releases, signalling to the browser that this
-// page has ongoing work and should not be throttled/suspended in the background.
-function acquireWakeLock() {
-  if (!navigator.locks?.request) return;
-  navigator.locks.request('noteblock-audio-keepalive', { mode: 'shared' }, () =>
-    new Promise(() => {}) // never resolves — holds the lock indefinitely
-  );
-}
+// iOS detection (iPadOS reports desktop UA but has maxTouchPoints > 1)
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   { queue, vibeVideos, vibeEnabled, crossfadeSecs = 5, jukeboxPaused = false,
-    vibePlayedIds = [], onMarkPlaying, onMarkPlayed, onNowPlaying, onVibeActive, onVibePlayed },
+    vibePlayedIds = [], onMarkPlaying, onMarkPlayed, onNowPlaying, onVibeActive, onVibePlayed,
+    venueId },
   ref
 ) {
   const [ytReady,       setYtReady]       = useState(false);
@@ -61,8 +56,15 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   const audioUnlocked = useRef(false);
   const fadeRef     = useRef(null);
   const pollRef     = useRef(null);
-  // Track whether music was playing when page was hidden so we can resume
+  // Tracks whether music was actively playing when the page was last hidden
   const wasPlayingRef = useRef(false);
+  // Last known video + position captured when the page goes to the background
+  const hiddenStateRef = useRef(null);
+  // AbortController that holds the current Web Lock (released on pause)
+  const wakeLockCtrlRef = useRef(null);
+  // Stores an entry to start as soon as the players finish initialising
+  // (used by resumeFromSaved when called before YouTube API is ready)
+  const pendingResumeRef = useRef(null);
 
   const S = useRef({
     active: 'A', crossfading: false, mode: 'idle',
@@ -80,6 +82,26 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   const getActive   = () => S.current.active === 'A' ? pA.current : pB.current;
   const getInactive = () => S.current.active === 'A' ? pB.current : pA.current;
 
+  // ── Web Lock helpers (component-level so they share wakeLockCtrlRef) ───────
+
+  function acquireWakeLock() {
+    if (!navigator.locks?.request) return;
+    releaseWakeLock();
+    wakeLockCtrlRef.current = new AbortController();
+    navigator.locks.request(
+      'noteblock-audio-keepalive',
+      { mode: 'shared', signal: wakeLockCtrlRef.current.signal },
+      () => new Promise(() => {}) // hold until aborted
+    ).catch(() => {}); // AbortError on release is expected
+  }
+
+  function releaseWakeLock() {
+    if (wakeLockCtrlRef.current) {
+      wakeLockCtrlRef.current.abort();
+      wakeLockCtrlRef.current = null;
+    }
+  }
+
   function getNextRequested(excludeId = null) {
     const pending = S.current.queue.filter(i => i.status === 'pending' && i.id !== excludeId);
     if (!pending.length) return null;
@@ -92,15 +114,12 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     if (!S.current.vibeEnabled || !vids.length) return null;
 
     const played = S.current.vibePlayedIds;
-
-    // Build ordered candidate list starting after afterIdx
     const startIdx = afterIdx !== null ? (afterIdx + 1) % vids.length : S.current.vibeIdx;
     const ordered = [];
     for (let i = 0; i < vids.length; i++) {
       ordered.push(vids[(startIdx + i) % vids.length]);
     }
 
-    // Pick first unplayed
     const unplayed = ordered.filter(v => !played.has(v.videoId));
     if (unplayed.length) {
       const pick = unplayed[0];
@@ -108,7 +127,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       return { type: 'vibe', videoId: pick.videoId, title: pick.title ?? 'Vibe', channel: pick.channel, vibeIdx: idx };
     }
 
-    // All played — reset and pick from beginning
+    // All played — reset and start over
     S.current.vibePlayedIds = new Set();
     const pick = ordered[0];
     const idx = vids.indexOf(pick);
@@ -219,7 +238,6 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       S.current.mode = 'idle'; S.current.current = null; S.current.next = null;
       onNowPlaying?.(null); onVibeActive?.(false); setIsPlaying(false);
       wasPlayingRef.current = false;
-      // Auto-start vibe if enabled — audio already unlocked at this point
       const vibe = getNextVibe(null);
       if (vibe) startEntry(vibe);
     }
@@ -244,7 +262,8 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     start() {
       if (!initialized.current || S.current.mode !== 'idle') return;
       audioUnlocked.current = true;
-      startSilentLoop(); // start keep-alive on first user-initiated play
+      startSilentLoop();
+      acquireWakeLock();
       const req = getNextRequested();
       if (req)  { startEntry(req);  return; }
       const vibe = getNextVibe(null);
@@ -263,6 +282,27 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
         S.current.current = null; S.current.next = null; S.current.mode = 'idle';
         onNowPlaying?.(null); onVibeActive?.(false); setIsPlaying(false);
         wasPlayingRef.current = false;
+      }
+    },
+    // Returns elapsed seconds of the currently-playing video (for state save)
+    getElapsed() {
+      try { return getActive()?.getCurrentTime?.() ?? 0; } catch { return 0; }
+    },
+    // Android Chrome restore: play a saved video, seeking to the saved position.
+    // Uses 'vibe' type so it integrates naturally with the queue/vibe state machine.
+    resumeFromSaved({ videoId, title, elapsed = 0 }) {
+      audioUnlocked.current = true;
+      startSilentLoop();
+      acquireWakeLock();
+      const entry = { type: 'vibe', videoId, title: title ?? 'Song', vibeIdx: 0 };
+      if (initialized.current && S.current.mode === 'idle') {
+        startEntry(entry);
+        if (elapsed > 2) {
+          setTimeout(() => { try { getActive()?.seekTo(elapsed, true); } catch {} }, 2500);
+        }
+      } else {
+        // Players not ready yet — queue for when they initialise
+        pendingResumeRef.current = { entry, elapsed };
       }
     },
     get isIdle() { return S.current.mode === 'idle'; },
@@ -312,20 +352,21 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       clearInterval(pauseFadeRef.current);
       fadeOutAndPause(1500);
       wasPlayingRef.current = false;
+      releaseWakeLock(); // no background work needed while paused
     } else if (S.current.mode !== 'idle') {
       clearInterval(pauseFadeRef.current);
       fadeInOnResume(800);
       wasPlayingRef.current = true;
+      acquireWakeLock(); // signal active playback to the browser
     }
   }, [jukeboxPaused]); // eslint-disable-line
 
   // ── Mobile background audio keep-alive ───────────────────────────────────
-  // visibilitychange: resume playback if the page was visible and playing when hidden
-  // Web Lock: prevent browser from throttling this tab in background
+
   useEffect(() => {
     acquireWakeLock();
 
-    // Start silent loop on first tap (iOS needs a gesture before AudioContext)
+    // Start silent loop on first tap anywhere (iOS requires a gesture)
     const onFirstGesture = () => {
       startSilentLoop();
       document.removeEventListener('touchstart', onFirstGesture);
@@ -335,11 +376,59 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     document.addEventListener('click', onFirstGesture, { passive: true });
 
     function handleVisibilityChange() {
-      if (document.hidden) return; // page going to background — nothing to do
-      // Page came back to foreground
-      resumeAudioCtx();
-      if (wasPlayingRef.current && initialized.current && !S.current.crossfading) {
-        try { getActive()?.playVideo(); } catch {}
+      if (document.hidden) {
+        // Capture current playback state for potential recovery on return
+        if (S.current.current?.videoId) {
+          try {
+            const elapsed = getActive()?.getCurrentTime?.() ?? 0;
+            hiddenStateRef.current = { videoId: S.current.current.videoId, elapsed };
+            // Persist to localStorage so Android Chrome can restore if the tab is killed
+            if (venueId) {
+              const title = S.current.current.type === 'requested'
+                ? (S.current.current.item?.song_title ?? 'Song')
+                : (S.current.current.title ?? 'Song');
+              localStorage.setItem(`nb_session_${venueId}`, JSON.stringify({
+                videoId: S.current.current.videoId,
+                title,
+                elapsed,
+                timestamp: Date.now(),
+              }));
+            }
+          } catch {}
+        }
+        return;
+      }
+
+      // Returning to foreground
+      resumeAudioCtx(); // re-activate AudioContext first (iOS requirement)
+
+      if (!wasPlayingRef.current || !initialized.current || S.current.crossfading) return;
+
+      const doResume = () => {
+        const player = getActive();
+        if (!player) return;
+        try {
+          const state = player.getPlayerState?.();
+          // -1=unstarted, 0=ended, 2=paused, 5=cued — player lost its video on iOS
+          if (state === -1 || state === 0 || state === 5) {
+            const hs = hiddenStateRef.current;
+            if (hs?.videoId) {
+              // Reload from last known position so playback resumes seamlessly
+              player.loadVideoById({ videoId: hs.videoId, startSeconds: Math.max(0, hs.elapsed - 1) });
+              player.unMute();
+              player.setVolume(100);
+            }
+          } else {
+            player.playVideo();
+          }
+        } catch {}
+      };
+
+      if (isIOS) {
+        // iOS needs the AudioContext to settle before YouTube audio can play
+        setTimeout(doResume, 300);
+      } else {
+        doResume();
       }
     }
 
@@ -348,6 +437,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('touchstart', onFirstGesture);
       document.removeEventListener('click', onFirstGesture);
+      releaseWakeLock();
     };
   }, []); // eslint-disable-line
 
@@ -378,6 +468,15 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
           readyCount.current++;
           if (readyCount.current < 2) return;
           initialized.current = true;
+          // If resumeFromSaved was called before the players were ready, fire it now
+          if (pendingResumeRef.current) {
+            const { entry, elapsed } = pendingResumeRef.current;
+            pendingResumeRef.current = null;
+            startEntry(entry);
+            if (elapsed > 2) {
+              setTimeout(() => { try { getActive()?.seekTo(elapsed, true); } catch {} }, 2500);
+            }
+          }
           pollRef.current = setInterval(() => {
             if (!audioUnlocked.current || S.current.crossfading || S.current.mode === 'idle') return;
             try {
@@ -410,19 +509,16 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     if (!initialized.current || !audioUnlocked.current) return;
     const { mode } = S.current;
 
-    // If idle, try to start something
     if (mode === 'idle') {
       const req = getNextRequested();
       if (req) { startEntry(req); return; }
       const vibe = getNextVibe(null);
       if (vibe) { startEntry(vibe); return; }
     }
-    // If vibe and a song arrives, crossfade into it
     if (mode === 'vibe' && !S.current.crossfading) {
       const req = getNextRequested();
       if (req) { doCrossfade(req); return; }
     }
-    // Update preloaded next
     if (mode === 'requested') {
       const next = computeNext(S.current.current);
       if (next?.videoId !== S.current.next?.videoId) {

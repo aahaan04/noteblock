@@ -50,6 +50,15 @@ export default function VenueControl() {
   const [loading, setLoading] = useState(true);
   const [skipping, setSkipping] = useState(false);
 
+  // One-time mobile check (≤1024px or mobile OS — per background-audio spec)
+  // eslint-disable-next-line no-undef
+  const isMobileFeatures = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 1024;
+  // Android Chrome restore banner — populated on mount if a recent session was found
+  const [resumeBanner, setResumeBanner] = useState(null); // { videoId, title, elapsed }
+  // Ref so beforeunload can read nowPlaying without a stale closure
+  const nowPlayingRef = useRef(null);
+  useEffect(() => { nowPlayingRef.current = nowPlaying; }, [nowPlaying]);
+
   useEffect(() => {
     if (!id || !token) return;
     loadVenue(); loadQueue(); loadBanned();
@@ -92,6 +101,58 @@ export default function VenueControl() {
       window.removeEventListener('click', reset);
     };
   }, []); // eslint-disable-line
+
+  // Android Chrome: on mount, check if the OS killed the tab mid-song and offer to resume
+  useEffect(() => {
+    if (!isMobileFeatures || !id) return;
+    try {
+      const raw = localStorage.getItem(`nb_session_${id}`);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (Date.now() - (saved.timestamp ?? 0) < 30 * 60 * 1000 && saved.videoId) {
+        setResumeBanner(saved);
+      }
+      localStorage.removeItem(`nb_session_${id}`);
+    } catch {}
+  }, []); // eslint-disable-line
+
+  // Android Chrome: persist playback state to localStorage before the tab unloads
+  // (the visibilitychange in CrossfadePlayer covers backgrounding; this covers full unload)
+  useEffect(() => {
+    if (!isMobileFeatures) return;
+    function onBeforeUnload() {
+      const np = nowPlayingRef.current;
+      if (!np || !id) return;
+      const elapsed = playerRef.current?.getElapsed?.() ?? 0;
+      const title = np.type === 'requested' ? np.item?.song_title : (np.title ?? 'Song');
+      try {
+        localStorage.setItem(`nb_session_${id}`, JSON.stringify({
+          videoId: np.videoId, title: title ?? 'Song', elapsed, timestamp: Date.now(),
+        }));
+      } catch {}
+    }
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [id]); // eslint-disable-line
+
+  // Media Session API — provides lock-screen metadata and headphone/Bluetooth controls
+  // Re-registers handlers on every nowPlaying/pause-state change for fresh closures
+  useEffect(() => {
+    if (!navigator.mediaSession) return;
+    if (!nowPlaying) {
+      try { navigator.mediaSession.playbackState = 'none'; } catch {}
+      return;
+    }
+    const title  = nowPlaying.type === 'requested' ? decode(nowPlaying.item?.song_title ?? '') : (nowPlaying.title ?? 'Vibe');
+    const artist = nowPlaying.type === 'requested' ? (nowPlaying.item?.requester_name ?? 'Guest') : 'Vibe Mode';
+    try {
+      navigator.mediaSession.metadata      = new MediaMetadata({ title, artist, album: 'Noteblock' });
+      navigator.mediaSession.playbackState = venue?.jukebox_paused ? 'paused' : 'playing';
+      navigator.mediaSession.setActionHandler('play',      () => handleVenueUpdate({ jukebox_paused: false }));
+      navigator.mediaSession.setActionHandler('pause',     () => handleVenueUpdate({ jukebox_paused: true }));
+      navigator.mediaSession.setActionHandler('nexttrack', () => handleSkip());
+    } catch {}
+  }, [nowPlaying, venue?.jukebox_paused]); // eslint-disable-line
 
   async function loadVenue() {
     try {
@@ -173,6 +234,14 @@ export default function VenueControl() {
     } catch {}
   }
 
+  function handleResumeSaved() {
+    if (!resumeBanner) return;
+    const saved = resumeBanner;
+    setResumeBanner(null);
+    setTab('player');
+    playerRef.current?.resumeFromSaved?.({ videoId: saved.videoId, title: saved.title, elapsed: saved.elapsed ?? 0 });
+  }
+
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-app)', minHeight: '100vh' }}>{t.loading}</div>;
   if (!venue) return null;
 
@@ -200,7 +269,7 @@ export default function VenueControl() {
             vibePlayedIds={vibePlayedIds}
             onMarkPlaying={handleMarkPlaying} onMarkPlayed={handleMarkPlayed}
             onNowPlaying={setNowPlaying} onVibeActive={setVibeActive}
-            onVibePlayed={handleVibePlayed}
+            onVibePlayed={handleVibePlayed} venueId={id}
           />
         </div>
         {/* Visualizer on top — purely cosmetic */}
@@ -364,6 +433,25 @@ export default function VenueControl() {
 
         {/* Scrollable content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px 0' }}>
+          {/* Android Chrome restore banner — only shown when a recent interrupted session is found */}
+          {resumeBanner && activeMainTab === 'player' && (
+            <div style={{
+              background: 'rgba(255,107,53,0.10)', border: '1px solid rgba(255,107,53,0.45)',
+              borderRadius: 10, padding: '12px 14px', marginBottom: 12,
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <Music size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Resume &ldquo;{resumeBanner.title}&rdquo;?
+              </span>
+              <button onClick={handleResumeSaved} style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: '#FF6B35', color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', flexShrink: 0 }}>
+                Resume
+              </button>
+              <button onClick={() => setResumeBanner(null)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, display: 'flex' }}>
+                <X size={16} />
+              </button>
+            </div>
+          )}
           {activeMainTab === 'player' && playerPanel}
 
           {activeMainTab === 'queue' && tabContent}
