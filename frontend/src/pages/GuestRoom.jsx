@@ -275,7 +275,7 @@ function SongAddedPopup({ popup, onDismiss }) {
 
 export default function GuestRoom() {
   const { roomCode } = useParams();
-  const { profile, token, refreshProfile, signOut } = useAuth();
+  const { profile, token, refreshProfile, signOut, loading: authLoading } = useAuth();
   const { t, lang, setLang } = useLang();
   const { dark, toggle } = useTheme();
   const navigate = useNavigate();
@@ -296,12 +296,16 @@ export default function GuestRoom() {
   const [nameSaved, setNameSaved] = useState(false);
   const prevCreditsRef = useRef(null);
 
-  // Redirect to join if not authenticated
+  // Only redirect once auth has settled — avoids false redirect while
+  // getSession() is still resolving (token starts null on every mount).
   useEffect(() => {
-    if (!token) navigate(`/join/${roomCode}`, { replace: true });
-  }, [token]);
+    if (!authLoading && !token) navigate(`/join/${roomCode}`, { replace: true });
+  }, [authLoading, token]); // eslint-disable-line
 
-  useEffect(() => { if (token) loadVenue(); }, [roomCode, token]);
+  // Venue, queue, and banned-songs are all public endpoints — no token needed.
+  // Fetch immediately so now-playing appears as soon as the network responds,
+  // not after auth resolves.
+  useEffect(() => { loadVenue(); }, [roomCode]); // eslint-disable-line
 
   useEffect(() => {
     const bal = profile?.credits_balance ?? 0;
