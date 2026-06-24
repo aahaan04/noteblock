@@ -109,11 +109,15 @@ router.get('/suggestions', async (req, res) => {
   const { vibe } = req.query;
   if (!vibe) return res.json([]);
 
-  // Search for top songs matching the vibe (not a playlist, actual song results)
-  const query = encodeURIComponent(`${vibe} best songs mix`);
+  // Search for individual songs matching the vibe.
+  // No videoCategoryId filter — it's too strict and excludes most non-Western
+  // music. No "best songs mix" suffix — that returns long compilations which
+  // are then all filtered out by the 10-minute duration cap.
+  // Fetch 15 so the duration filter still leaves enough to show.
+  const query = encodeURIComponent(`${vibe} song`);
   try {
     const searchRes = await fetch(
-      `${YT_BASE}/search?part=snippet&q=${query}&type=video&videoCategoryId=10&maxResults=5&key=${API_KEY()}`
+      `${YT_BASE}/search?part=snippet&q=${query}&type=video&maxResults=15&key=${API_KEY()}`
     );
     const searchData = await searchRes.json();
     if (!searchData.items?.length) return res.json([]);
@@ -142,6 +146,7 @@ router.get('/suggestions', async (req, res) => {
         };
       })
       .filter(r => r.durationSeconds !== null && r.durationSeconds > 0 && r.durationSeconds <= MAX_DURATION_SECONDS)
+      .slice(0, 5)
     );
   } catch (err) {
     console.error('Suggestions error:', err);
