@@ -115,7 +115,7 @@ export default function HostDashboard() {
             <button className="btn-primary" type="submit" disabled={creating} style={{ flex: 1 }}>
               {creating ? t.loading : t.createVenue}
             </button>
-            <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)} style={{ flex: 1 }}>
+            <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)} style={{ flex: 1, height: 52 }}>
               {t.cancel}
             </button>
           </div>
