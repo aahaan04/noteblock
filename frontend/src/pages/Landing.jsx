@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sliders, Music, ArrowLeft } from 'lucide-react';
+import { Sliders, Music } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -95,7 +95,7 @@ export default function Landing() {
     <div className="center-screen">
       <div style={{ width: '100%', maxWidth: 360 }}>
         <button onClick={() => setMode(null)} style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', marginBottom: 24, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <ArrowLeft size={16} /> {t.back}
+          {t.back}
         </button>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Logo size={40} style={{ margin: '0 auto 10px' }} />
@@ -129,7 +129,7 @@ export default function Landing() {
           onClick={() => { setMode(null); setForgotPw(false); setForgotSent(false); setError(''); setForgotError(''); }}
           style={{ background: 'none', border: 'none', color: '#8B6F52', cursor: 'pointer', marginBottom: 24, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}
         >
-          <ArrowLeft size={16} /> {t.back}
+          {t.back}
         </button>
 
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
