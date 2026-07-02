@@ -1,4 +1,4 @@
-import{c as N,u as M,a as _,b as W,r as i,s as j,j as e,L as B,V as I}from"./index-7bf15481.js";import{Q as k,V as L}from"./VenueQRCode-72b672a0.js";import{S as Q}from"./settings-207be7a2.js";/**
+import{c as N,u as M,a as _,b as W,r as i,s as j,j as e,L as B,V as I}from"./index-a89f014d.js";import{Q as k,V as L}from"./VenueQRCode-255a7d33.js";import{S as Q}from"./settings-2a822871.js";/**
  * @license lucide-react v1.17.0 - ISC
  *
  * This source code is licensed under the ISC license.

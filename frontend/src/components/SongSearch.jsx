@@ -1,12 +1,20 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Search, Sparkles, ChevronDown } from 'lucide-react';
+import { Search, Sparkles, ChevronDown, Zap, Coins } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useLang } from '../context/LangContext.jsx';
+import SongThumb from './SongThumb.jsx';
 
 const PAGE_SIZE = 5;
 const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
-export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescription = '' }) {
+// `onSelect` (host Ban-Songs picker): tapping a card selects it, caller shows its own confirm UI. Unchanged.
+// `onRequest` (guest song request): when provided, each card renders Quick/Normal
+// buttons with live pricing that call onRequest(song, playType) directly — no
+// intermediate select step. quickPrice/credits/requestingKey are guest-only.
+export default function SongSearch({
+  bannedIds = new Set(), onSelect, vibeDescription = '',
+  onRequest, quickPrice, credits, requestingKey,
+}) {
   const { t } = useLang();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -55,12 +63,14 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
   const visible = results.slice(0, visibleCount);
   const hasMore = results.length > visibleCount;
 
+  const cardProps = { onSelect, onRequest, quickPrice, credits, requestingKey };
+
   return (
     <div>
       {/* Search input */}
-      <div style={{ position: 'relative', marginBottom: 12 }}>
-        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-secondary)' }}>
-          <Search size={18} />
+      <div style={{ position: 'relative', marginBottom: 14 }}>
+        <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }}>
+          <Search size={16} />
         </span>
         <input
           type="text"
@@ -72,9 +82,10 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
             paddingLeft: 40, paddingRight: 16, paddingTop: 12, paddingBottom: 12,
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
-            borderRadius: 7,
+            borderRadius: 12,
             color: 'var(--text-primary)',
-            fontSize: 15,
+            fontSize: 14,
+            fontWeight: 500,
             outline: 'none',
             fontFamily: 'inherit',
             transition: 'border-color 0.15s',
@@ -97,9 +108,9 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
       )}
 
       {!loading && results.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 8 }}>
           {visible.map(r => (
-            <SongCard key={r.videoId} song={r} onSelect={onSelect} />
+            <SongCard key={r.videoId} song={r} {...cardProps} />
           ))}
           {hasMore && (
             <button
@@ -107,8 +118,9 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
               style={{
                 padding: '10px', borderRadius: 7, border: '1px dashed var(--border)',
                 background: 'transparent', color: 'var(--text-secondary)',
-                cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                cursor: 'pointer', fontSize: 13, fontWeight: 600, marginTop: 6,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                fontFamily: 'inherit',
               }}
             >
               <ChevronDown size={16} />
@@ -123,7 +135,7 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
         <div style={{ marginTop: query && results.length ? 20 : 0 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
-            fontSize: 11, fontWeight: 700, color: 'var(--credits)',
+            fontSize: 11, fontWeight: 800, color: 'var(--credits)',
             textTransform: 'uppercase', letterSpacing: '0.06em',
           }}>
             <Sparkles size={13} />
@@ -132,9 +144,9 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
           {suggestionsLoading && (
             <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: '8px 0' }}>{t.searching}</div>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {suggestions.map(r => (
-              <SongCard key={r.videoId} song={r} onSelect={onSelect} accent />
+              <SongCard key={r.videoId} song={r} accent {...cardProps} />
             ))}
           </div>
         </div>
@@ -143,7 +155,72 @@ export default function SongSearch({ bannedIds = new Set(), onSelect, vibeDescri
   );
 }
 
-function SongCard({ song, onSelect, accent }) {
+function SongCard({ song, onSelect, accent, onRequest, quickPrice, credits, requestingKey }) {
+  // Guest request mode: dual Quick/Normal buttons with live pricing, no select step.
+  if (onRequest) {
+    const normalCost = 2;
+    const quickCost = quickPrice ?? 3;
+    const canNormal = credits === undefined || credits >= normalCost;
+    const canQuick = credits === undefined || credits >= quickCost;
+    const normalBusy = requestingKey === `${song.videoId}:normal`;
+    const quickBusy = requestingKey === `${song.videoId}:quick`;
+    const anyBusy = !!requestingKey;
+
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 0', borderBottom: '1px solid var(--bg-card)',
+      }}>
+        <SongThumb src={song.thumbnail} size={46} radius={10} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.1px' }}>
+            {decode(song.title)}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
+            {decode(song.channel)}
+            {song.duration && ` · ${song.duration}`}
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, width: 88 }}>
+          <button
+            onClick={() => onRequest(song, 'quick')}
+            disabled={!canQuick || anyBusy}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              borderRadius: 9, padding: '6px 9px', border: 'none', cursor: canQuick && !anyBusy ? 'pointer' : 'default',
+              background: '#FF6B35', boxShadow: canQuick ? '0 0 10px rgba(255,107,53,0.35)' : 'none',
+              opacity: !canQuick ? 0.4 : quickBusy ? 0.6 : 1, fontFamily: 'inherit',
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, letterSpacing: 0.2, color: 'rgba(14,10,7,0.75)' }}>
+              <Zap size={9} /> QUICK
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 800, color: '#0E0A07' }}>
+              {quickCost}<Coins size={10} />
+            </span>
+          </button>
+          <button
+            onClick={() => onRequest(song, 'normal')}
+            disabled={!canNormal || anyBusy}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              borderRadius: 9, padding: '6px 9px',
+              background: 'var(--border)', border: '1px solid var(--btn-normal)',
+              cursor: canNormal && !anyBusy ? 'pointer' : 'default',
+              opacity: !canNormal ? 0.4 : normalBusy ? 0.6 : 1, fontFamily: 'inherit',
+            }}
+          >
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.2, color: 'var(--text-secondary)' }}>NORMAL</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 800, color: 'var(--credits)' }}>
+              {normalCost}<Coins size={10} />
+            </span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Host Ban-Songs picker mode — unchanged from before.
   return (
     <button
       onClick={() => onSelect(song)}
@@ -153,6 +230,7 @@ function SongCard({ song, onSelect, accent }) {
         border: `1px solid ${accent ? 'rgba(200,155,110,0.2)' : 'var(--border)'}`,
         borderRadius: 10,
         padding: '10px 14px',
+        marginBottom: 8,
         textAlign: 'left',
         cursor: 'pointer',
         width: '100%',

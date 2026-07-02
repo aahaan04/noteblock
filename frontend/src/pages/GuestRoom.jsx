@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Search, ListMusic, Clock, Pause, Settings, X, Sun, Moon, LogOut, Check } from 'lucide-react';
+import {
+  Search, ListMusic, Clock, Pause, Settings, X, Sun, Moon, LogOut, Check,
+  ArrowLeft, Globe, User, Receipt, ChevronRight, Disc3, Coins,
+} from 'lucide-react';
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -11,12 +14,15 @@ import { supabase } from '../lib/supabase.js';
 import SongSearch from '../components/SongSearch.jsx';
 import QueueDisplay from '../components/QueueDisplay.jsx';
 import NowPlaying from '../components/NowPlaying.jsx';
+import NowPlayingHome from '../components/NowPlayingHome.jsx';
 import CreditBalance from '../components/CreditBalance.jsx';
+import SongThumb from '../components/SongThumb.jsx';
 
 const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
 const HISTORY_MAX = 100;
 const CONFETTI_COLORS = ['#FF6B35','#FFD700','#34d399','#60a5fa','#f472b6','#a78bfa','#FF4444','#FFCC00'];
+const GUEST_FONT = "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 function historyKey(venueId, profileId) {
   return `nb_history_${venueId}_${profileId ?? 'anon'}`;
@@ -273,6 +279,29 @@ function SongAddedPopup({ popup, onDismiss }) {
   );
 }
 
+// ── Small style helpers for the settings-row list ────────────────────────────
+const settingsRowStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid var(--bg-card)' };
+const settingsRowLeftStyle = { display: 'flex', alignItems: 'center', gap: 12 };
+const settingsIconStyle = { width: 34, height: 34, background: 'var(--border)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--credits)', flexShrink: 0 };
+const settingsLabelStyle = { fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' };
+const settingsSubStyle = { fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, marginTop: 1 };
+
+function navItemStyle() {
+  return { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 4px', background: 'none', border: 'none', cursor: 'pointer', flex: 1, fontFamily: 'inherit' };
+}
+function navLabelStyle(active) {
+  return { fontSize: 10, fontWeight: 700, color: active ? '#FF6B35' : 'var(--text-muted)', letterSpacing: 0.3 };
+}
+function segBtnStyle(active) {
+  return {
+    flex: 1, minHeight: 40, padding: '8px 10px', borderRadius: 9, cursor: 'pointer', fontSize: 12,
+    background: active ? '#FF6B35' : 'var(--bg-card)',
+    color: active ? '#0E0A07' : 'var(--text-secondary)',
+    fontWeight: active ? 700 : 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontFamily: 'inherit',
+    border: active ? 'none' : '1px solid var(--border)',
+  };
+}
+
 export default function GuestRoom() {
   const { roomCode } = useParams();
   const { profile, token, refreshProfile, signOut, loading: authLoading } = useAuth();
@@ -284,16 +313,19 @@ export default function GuestRoom() {
   const [queue, setQueue] = useState([]);
   const [banned, setBanned] = useState([]);
   const [credits, setCredits] = useState(0);
-  const [selected, setSelected] = useState(null);
   const [quickPrice, setQuickPrice] = useState(3);
+  const [requestingKey, setRequestingKey] = useState(null); // `${videoId}:${playType}` in flight — guards double-tap
   const [sessionHistory, setSessionHistory] = useState([]);
-  const [tab, setTab] = useState('search');
+  const [tab, setTab] = useState('search'); // 'search' | 'home' | 'queue'
+  const [queueView, setQueueView] = useState('queue'); // 'queue' | 'history'
   const [toast, setToast] = useState('');
   const [songPopup, setSongPopup] = useState(null); // { title, playType, credits }
   const [pausedWarn, setPausedWarn] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsName, setSettingsName] = useState(profile?.display_name ?? '');
   const [nameSaved, setNameSaved] = useState(false);
+  const [packages, setPackages] = useState([]);
+  const [buyingPkg, setBuyingPkg] = useState(null);
   const prevCreditsRef = useRef(null);
 
   // Only redirect once auth has settled — avoids false redirect while
@@ -378,7 +410,7 @@ export default function GuestRoom() {
     setBanned(b);
   }
 
-  // Real-time + 5s polling fallback
+  // Real-time + 30s polling fallback
   useEffect(() => {
     if (!venue) return;
     const qSub = supabase
@@ -416,28 +448,35 @@ export default function GuestRoom() {
     return () => supabase.removeChannel(ch);
   }, [venue?.id, profile?.display_name]);
 
-  const handleSelect = useCallback(async (song) => {
+  // Quick Play price is dynamic (based on pending queue length) — keep it fresh
+  // so search-result buttons always show an accurate price without a select step.
+  const pendingCount = queue.filter(i => i.status === 'pending').length;
+  useEffect(() => {
+    if (!venue?.id) return;
+    api.queue.price(venue.id).then(({ price }) => setQuickPrice(price)).catch(() => {});
+  }, [venue?.id, pendingCount]);
+
+  // Fetch top-up packages only once Settings is actually opened.
+  useEffect(() => {
+    if (!showSettings) return;
+    api.credits.packages().then(setPackages).catch(() => setPackages([]));
+  }, [showSettings]);
+
+  // Request a song directly (Quick or Normal) — no intermediate confirm step.
+  const handleRequest = useCallback(async (song, playType) => {
+    if (requestingKey || !venue) return;
     const isBanned = banned.some(b => b.youtube_video_id === song.videoId);
     if (isBanned) { showToast(t.songBanned); return; }
-    if (venue) {
-      const { price } = await api.queue.price(venue.id).catch(() => ({ price: 3 }));
-      setQuickPrice(price);
-    }
-    setSelected(song);
-  }, [banned, venue, t]);
-
-  async function handleConfirm(playType) {
-    if (!selected || !venue) return;
-    if (venue.jukebox_paused && !venue.queue_open_when_paused) {
-      setPausedWarn(true); setSelected(null); return;
-    }
+    if (venue.jukebox_paused && !venue.queue_open_when_paused) { setPausedWarn(true); return; }
     const cost = playType === 'normal' ? 2 : quickPrice;
     if (credits < cost) { showToast(t.insufficientCredits); return; }
+
+    setRequestingKey(`${song.videoId}:${playType}`);
     const requesterName = profile?.display_name ?? 'Guest';
     try {
       const result = await api.queue.add(venue.id, {
-        youtube_video_id: selected.videoId, song_title: selected.title,
-        thumbnail_url: selected.thumbnail, play_type: playType, requester_name: requesterName,
+        youtube_video_id: song.videoId, song_title: song.title,
+        thumbnail_url: song.thumbnail, play_type: playType, requester_name: requesterName,
       }, token);
       const newBalance = credits - result.credits_charged;
       prevCreditsRef.current = newBalance;
@@ -445,7 +484,7 @@ export default function GuestRoom() {
       refreshProfile();
 
       // Persist history
-      const entry = { ...selected, playType, credits: result.credits_charged, timestamp: Date.now() };
+      const entry = { ...song, playType, credits: result.credits_charged, timestamp: Date.now() };
       setSessionHistory(prev => {
         const updated = [entry, ...prev];
         saveStoredHistory(venue.id, profile?.id, updated);
@@ -453,8 +492,7 @@ export default function GuestRoom() {
       });
 
       // Show confetti popup instead of toast
-      setSongPopup({ title: decode(selected.title), playType, credits: result.credits_charged });
-      setSelected(null);
+      setSongPopup({ title: decode(song.title), playType, credits: result.credits_charged });
       loadQueue(venue.id);
     } catch (err) {
       const msg = err.data?.error;
@@ -462,7 +500,27 @@ export default function GuestRoom() {
       else if (msg === 'song_banned') showToast(t.songBanned);
       else if (msg === 'user_banned') showToast('You have been banned from this jukebox');
       else if (msg === 'jukebox_paused') setPausedWarn(true);
+      else if (msg === 'already_queued') showToast('You already requested this song');
       else showToast(t.error);
+    } finally {
+      setRequestingKey(null);
+    }
+  }, [banned, venue, credits, quickPrice, profile, token, t, refreshProfile, requestingKey]); // eslint-disable-line
+
+  // Credit top-up — calls the real purchase-intent endpoint. Razorpay keys aren't
+  // configured on the backend yet (it responds 503 payment_not_configured), so this
+  // surfaces a friendly "coming soon" message rather than opening a checkout that
+  // doesn't exist. Swap in the Razorpay checkout.js flow once keys are added server-side.
+  async function handleTopUp(pkg) {
+    if (buyingPkg) return;
+    setBuyingPkg(pkg.id);
+    try {
+      await api.credits.purchaseIntent({ package_id: pkg.id }, token);
+    } catch (err) {
+      if (err.data?.error === 'payment_not_configured') showToast('Credit purchases are coming soon!');
+      else showToast(t.error);
+    } finally {
+      setBuyingPkg(null);
     }
   }
 
@@ -491,33 +549,30 @@ export default function GuestRoom() {
     return true;
   });
   const nowPlaying = nowPlayingItem ? { type: 'requested', item: nowPlayingItem } : null;
-  const vibeActive = !nowPlayingItem && venue?.vibe_mode_enabled && queue.filter(i => i.status === 'pending').length === 0;
+  const vibeActive = !nowPlayingItem && venue?.vibe_mode_enabled && pendingCount === 0;
   const bannedIds = new Set(banned.map(b => b.youtube_video_id));
+  const bestPkg = packages.length
+    ? packages.reduce((best, p) => (p.credits / p.amount_paise > best.credits / best.amount_paise ? p : best), packages[0])
+    : null;
 
   if (!venue) return <div className="center-screen"><p style={{ color: 'var(--text-secondary)' }}>{t.loading}</p></div>;
 
-  const tabs = [
-    { key: 'search',  icon: <Search size={14} />,   label: t.search ?? 'Search' },
-    { key: 'queue',   icon: <ListMusic size={14} />, label: `${t.queue} (${queue.filter(i => i.status === 'pending').length})` },
-    { key: 'history', icon: <Clock size={14} />,     label: t.historyTab },
-  ];
-
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 0 80px', minHeight: '100vh', background: 'var(--bg-app)' }}>
+    <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 0 84px', minHeight: '100vh', background: 'var(--bg-app)', fontFamily: GUEST_FONT }}>
 
       {/* ── Sticky header ── */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 50,
-        background: 'var(--bg-page)', borderBottom: '1px solid var(--border)',
-        height: 52, padding: '0 12px 0 16px', display: 'flex', alignItems: 'center', gap: 10,
+        background: 'var(--bg-card)', borderBottom: '1px solid var(--border)',
+        height: 56, padding: '0 14px 0 16px', display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
-          <Logo size={20} />
-          <span style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-primary)' }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Logo size={26} />
+          <span style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
             {venue.name}
           </span>
           {vibeActive && (
-            <span style={{ fontSize: 11, color: '#FF6B35', fontWeight: 600 }}>
+            <span style={{ fontSize: 11, color: '#FF6B35', fontWeight: 600, flexShrink: 0 }}>
               {t.vibeMode}
             </span>
           )}
@@ -526,62 +581,72 @@ export default function GuestRoom() {
         <button
           onClick={() => setShowSettings(true)}
           style={{
-            width: 36, height: 36, borderRadius: 8, border: '1px solid var(--border)',
-            background: 'var(--bg-card)', color: 'var(--text-secondary)',
+            width: 34, height: 34, borderRadius: '50%', border: 'none',
+            background: 'var(--border)', color: 'var(--text-secondary)',
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, transition: 'border-color 0.15s, color 0.15s',
+            flexShrink: 0, transition: 'color 0.15s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF6B35'; e.currentTarget.style.color = '#FF6B35'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#FF6B35'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
         >
           <Settings size={16} />
         </button>
       </div>
 
-      {/* ── Status area ── */}
-      <div style={{ padding: '12px 16px 0' }}>
-        {venue.jukebox_paused ? (
-          venue.queue_open_when_paused ? (
-            <div style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-              <Pause size={24} color="#34d399" style={{ flexShrink: 0 }} />
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.jukeboxOff}</div>
-                <div style={{ fontSize: 12, color: '#6ee7b7' }}>{t.queuingModeMsg}</div>
+      {/* ── Status area — hidden on the Home tab, which shows its own big now-playing view ── */}
+      {tab !== 'home' && (
+        <div style={{ padding: '14px 16px 0' }}>
+          {venue.jukebox_paused ? (
+            venue.queue_open_when_paused ? (
+              <div style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <Pause size={24} color="#34d399" style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.jukeboxOff}</div>
+                  <div style={{ fontSize: 12, color: '#6ee7b7' }}>{t.queuingModeMsg}</div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <Pause size={24} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.jukeboxOff}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t.jukeboxOffMsg}</div>
+                </div>
+              </div>
+            )
           ) : (
-            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-              <Pause size={24} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.jukeboxOff}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t.jukeboxOffMsg}</div>
-              </div>
-            </div>
-          )
-        ) : (
-          <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} />
+            <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} />
+          )}
+        </div>
+      )}
+
+      {/* ── Tab content ── */}
+      <div style={{ padding: tab === 'home' ? '0 16px' : '16px' }}>
+        {tab === 'search' && (
+          <SongSearch
+            bannedIds={bannedIds}
+            onRequest={handleRequest}
+            quickPrice={quickPrice}
+            credits={credits}
+            requestingKey={requestingKey}
+            vibeDescription={venue.vibe_mode_enabled ? (venue.vibe_description ?? '') : ''}
+          />
         )}
-      </div>
 
-      {/* ── Tabs & content — always shown so guests can browse ── */}
-      <>
-          <div style={{ display: 'flex', gap: 4, padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
-            {tabs.map(({ key, icon, label }) => (
-              <button key={key} onClick={() => setTab(key)} style={{
-                flex: 1, minHeight: 44, padding: '6px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12,
-                background: tab === key ? '#FF6B35' : 'transparent',
-                color: tab === key ? 'var(--bg-app)' : 'var(--text-secondary)',
-                fontWeight: tab === key ? 700 : 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontFamily: 'inherit',
-              }}>
-                {icon} {label}
+        {tab === 'queue' && (
+          <div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+              <button onClick={() => setQueueView('queue')} style={segBtnStyle(queueView === 'queue')}>
+                <ListMusic size={13} /> {t.queue} ({pendingCount})
               </button>
-            ))}
-          </div>
+              <button onClick={() => setQueueView('history')} style={segBtnStyle(queueView === 'history')}>
+                <Clock size={13} /> {t.historyTab}
+              </button>
+            </div>
 
-          <div style={{ padding: '16px' }}>
-            {tab === 'search' && <SongSearch bannedIds={bannedIds} onSelect={handleSelect} vibeDescription={venue.vibe_mode_enabled ? (venue.vibe_description ?? '') : ''} />}
-            {tab === 'queue' && <QueueDisplay items={queue} isHost={false} />}
-            {tab === 'history' && (
+            {queueView === 'queue' && <QueueDisplay items={queue} isHost={false} />}
+
+            {queueView === 'history' && (
               <div>
                 {sessionHistory.length > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -599,7 +664,7 @@ export default function GuestRoom() {
                   )}
                   {sessionHistory.map((s, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' }}>
-                      {s.thumbnail && <img src={s.thumbnail} alt="" loading="lazy" style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
+                      <SongThumb src={s.thumbnail} size={44} radius={8} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(s.title)}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
@@ -613,35 +678,39 @@ export default function GuestRoom() {
               </div>
             )}
           </div>
-      </>
+        )}
 
-      {/* ── Song confirmation modal ── */}
-      {selected && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200, padding: '0 0 16px' }}>
-          <div style={{ background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: '14px 14px 10px 10px', padding: 24, width: '100%', maxWidth: 520 }}>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-              {selected.thumbnail && <img src={selected.thumbnail} alt="" style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 8 }} />}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-primary)' }}>{decode(selected.title)}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{decode(selected.channel)}</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-              <button
-                style={{ flex: 1, minHeight: 56, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= 2 ? 'var(--btn-normal)' : 'var(--bg-card)', color: credits >= 2 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < 2 ? 0.5 : 1 }}
-                onClick={() => handleConfirm('normal')} disabled={credits < 2}>
-                {t.normalPlay}<br /><span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)' }}>2 {t.credits}</span>
-              </button>
-              <button
-                style={{ flex: 1, minHeight: 56, padding: 14, borderRadius: 7, border: 'none', cursor: 'pointer', background: credits >= quickPrice ? '#FF6B35' : 'var(--bg-card)', color: 'var(--text-primary)', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', opacity: credits < quickPrice ? 0.5 : 1, boxShadow: credits >= quickPrice ? '0 0 16px rgba(255,107,53,0.45)' : 'none' }}
-                onClick={() => handleConfirm('quick')} disabled={credits < quickPrice}>
-                {t.quickPlay}<br /><span style={{ fontSize: 12, fontWeight: 400 }}>{quickPrice} {t.credits}</span>
-              </button>
-            </div>
-            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setSelected(null)}>{t.cancel}</button>
-          </div>
-        </div>
-      )}
+        {tab === 'home' && (
+          <NowPlayingHome venue={venue} nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} />
+        )}
+      </div>
+
+      {/* ── Bottom navigation ── */}
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 60,
+        maxWidth: 520, margin: '0 auto',
+        background: 'var(--bg-card)', borderTop: '1px solid var(--border)',
+        padding: '8px 0 max(8px, env(safe-area-inset-bottom))',
+        display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+      }}>
+        <button onClick={() => setTab('search')} style={navItemStyle()}>
+          <Search size={20} color={tab === 'search' ? '#FF6B35' : 'var(--text-muted)'} />
+          <span style={navLabelStyle(tab === 'search')}>{t.search ?? 'Search'}</span>
+        </button>
+        <button onClick={() => setTab('home')} style={{ ...navItemStyle(), marginTop: -18 }} title="Now Playing">
+          <span style={{
+            width: 52, height: 52, borderRadius: '50%', background: '#FF6B35',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 20px rgba(255,107,53,0.5)',
+          }}>
+            <Disc3 size={22} color="#0E0A07" />
+          </span>
+        </button>
+        <button onClick={() => setTab('queue')} style={navItemStyle()}>
+          <ListMusic size={20} color={tab === 'queue' ? '#FF6B35' : 'var(--text-muted)'} />
+          <span style={navLabelStyle(tab === 'queue')}>{t.queue}</span>
+        </button>
+      </div>
 
       {/* ── Confetti popup (song queued) ── */}
       <SongAddedPopup popup={songPopup} onDismiss={() => setSongPopup(null)} />
@@ -651,45 +720,121 @@ export default function GuestRoom() {
         <PausedWarnPopup onDismiss={() => setPausedWarn(false)} t={t} />
       )}
 
-      {/* ── Settings sheet ── */}
+      {/* ── Settings — full-screen ── */}
       {showSettings && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}
-        >
-          <div style={{ background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: '16px 16px 0 0', padding: '20px 20px 32px', width: '100%', maxWidth: 520, maxHeight: '85vh', overflowY: 'auto' }}>
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border)', margin: '0 auto 20px' }} />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{t.settingsTitle}</h2>
-              <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', padding: 4 }}>
-                <X size={20} />
-              </button>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'var(--bg-app)', display: 'flex', flexDirection: 'column', fontFamily: GUEST_FONT }}>
+          <div style={{ padding: '18px 20px', background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+            <button
+              onClick={() => setShowSettings(false)}
+              style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--border)', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>{t.settingsTitle}</h2>
+          </div>
+
+          <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 40px' }}>
+
+            {/* Credits */}
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 10 }}>
+              Your Credits
+            </div>
+            <div style={{ background: 'var(--bg-card)', border: '1px solid #FF6B35', borderRadius: 16, padding: 18, boxShadow: '0 0 20px rgba(255,107,53,0.1)', marginBottom: 20 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 6 }}>Current balance</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 30, fontWeight: 800, color: '#FF6B35', letterSpacing: '-0.5px' }}>
+                {credits}
+                <span style={{ width: 30, height: 30, borderRadius: '50%', background: '#FF6B35', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Coins size={15} color="#0E0A07" />
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>{t.credits}</span>
+              </div>
+              {bestPkg && (
+                <button
+                  onClick={() => handleTopUp(bestPkg)}
+                  disabled={!!buyingPkg}
+                  style={{ marginTop: 14, background: '#FF6B35', color: '#0E0A07', border: 'none', borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 800, width: '100%', boxShadow: '0 0 16px rgba(255,107,53,0.35)', cursor: 'pointer', fontFamily: 'inherit', opacity: buyingPkg ? 0.6 : 1 }}
+                >
+                  {buyingPkg === bestPkg.id ? 'Processing…' : 'Top Up Credits'}
+                </button>
+              )}
+            </div>
+
+            {/* Quick top-up packs */}
+            {packages.length > 0 && (
+              <>
+                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 10 }}>
+                  Quick Top-Up
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 24 }}>
+                  {packages.map(pkg => {
+                    const isBest = pkg.id === bestPkg?.id;
+                    return (
+                      <button
+                        key={pkg.id}
+                        onClick={() => handleTopUp(pkg)}
+                        disabled={!!buyingPkg}
+                        style={{
+                          background: 'var(--bg-card)', border: `1px solid ${isBest ? '#FF6B35' : 'var(--border)'}`,
+                          borderRadius: 14, padding: '14px 8px', textAlign: 'center', position: 'relative',
+                          cursor: 'pointer', fontFamily: 'inherit',
+                          boxShadow: isBest ? '0 0 16px rgba(255,107,53,0.2)' : 'none',
+                          opacity: buyingPkg && buyingPkg !== pkg.id ? 0.5 : 1,
+                        }}
+                      >
+                        {isBest && (
+                          <span style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: '#FF6B35', color: '#0E0A07', fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 10, whiteSpace: 'nowrap', letterSpacing: 0.5 }}>
+                            BEST VALUE
+                          </span>
+                        )}
+                        <div style={{ fontSize: 20, fontWeight: 800, color: isBest ? '#FF6B35' : 'var(--text-primary)', letterSpacing: '-0.3px', marginBottom: 2 }}>
+                          {pkg.credits}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 10 }}>{t.credits}</div>
+                        <div style={{ fontSize: 12, fontWeight: 800, borderRadius: 8, padding: 6, background: isBest ? '#FF6B35' : 'var(--border)', color: isBest ? '#0E0A07' : 'var(--text-primary)' }}>
+                          ₹{Math.round(pkg.amount_paise / 100)}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* Preferences */}
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 10 }}>
+              Preferences
             </div>
 
             {/* Dark / Light */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', marginBottom: 16, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {dark ? <Moon size={16} color="var(--credits)" /> : <Sun size={16} color="#FF6B35" />}
+            <div style={settingsRowStyle}>
+              <div style={settingsRowLeftStyle}>
+                <span style={settingsIconStyle}>{dark ? <Moon size={16} /> : <Sun size={16} />}</span>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 1 }}>{dark ? t.darkMode : t.lightMode}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{dark ? t.switchToLight : t.switchToDark}</div>
+                  <div style={settingsLabelStyle}>{dark ? t.darkMode : t.lightMode}</div>
+                  <div style={settingsSubStyle}>{dark ? t.switchToLight : t.switchToDark}</div>
                 </div>
               </div>
-              <button onClick={toggle} style={{ flexShrink: 0, width: 48, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer', background: dark ? '#FF6B35' : 'var(--border)', position: 'relative', padding: 0 }}>
-                <span style={{ position: 'absolute', top: 4, left: dark ? 24 : 4, width: 20, height: 20, borderRadius: '50%', background: 'var(--text-primary)', transition: 'left 0.2s', display: 'block' }} />
+              <button onClick={toggle} style={{ flexShrink: 0, width: 42, height: 24, borderRadius: 999, border: dark ? 'none' : '1px solid var(--btn-normal)', cursor: 'pointer', background: dark ? '#FF6B35' : 'var(--border)', position: 'relative', padding: 0 }}>
+                <span style={{ position: 'absolute', top: 2, left: dark ? 21 : 3, width: 18, height: 18, borderRadius: '50%', background: dark ? '#0E0A07' : 'var(--text-primary)', transition: 'left 0.2s', display: 'block' }} />
               </button>
             </div>
 
             {/* Language */}
-            <div style={{ marginBottom: 18 }}>
-              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>{t.language}</label>
-              <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ ...settingsRowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+              <div style={settingsRowLeftStyle}>
+                <span style={settingsIconStyle}><Globe size={16} /></span>
+                <div>
+                  <div style={settingsLabelStyle}>{t.language}</div>
+                  <div style={settingsSubStyle}>{lang === 'en' ? t.english : lang === 'hi' ? t.hindi : t.mandarin}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, paddingLeft: 46 }}>
                 {[{ code: 'en', label: t.english }, { code: 'hi', label: t.hindi }, { code: 'zh', label: t.mandarin }].map(({ code, label }) => (
                   <button key={code} onClick={() => setLang(code)} style={{
-                    flex: 1, padding: '10px 4px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                    fontWeight: 600, fontSize: 14, fontFamily: 'inherit',
-                    background: lang === code ? '#FF6B35' : 'var(--bg-card)',
-                    color: 'var(--text-primary)', opacity: lang === code ? 1 : 0.6,
+                    flex: 1, padding: '8px 4px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                    fontWeight: 600, fontSize: 13, fontFamily: 'inherit',
+                    background: lang === code ? '#FF6B35' : 'var(--bg-app)',
+                    color: lang === code ? '#0E0A07' : 'var(--text-secondary)',
                   }}>
                     {label}
                   </button>
@@ -699,24 +844,43 @@ export default function GuestRoom() {
 
             {/* Display name */}
             {profile && (
-              <form onSubmit={handleSaveName} style={{ marginBottom: 18 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{t.displayName}</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input className="input" value={settingsName} onChange={e => setSettingsName(e.target.value)} style={{ flex: 1 }} />
-                  <button type="submit" className="btn-primary" style={{ padding: '0 18px', height: 44, whiteSpace: 'nowrap' }}>
+              <div style={{ ...settingsRowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+                <div style={settingsRowLeftStyle}>
+                  <span style={settingsIconStyle}><User size={16} /></span>
+                  <div>
+                    <div style={settingsLabelStyle}>{t.displayName}</div>
+                    <div style={settingsSubStyle}>{profile.display_name}</div>
+                  </div>
+                </div>
+                <form onSubmit={handleSaveName} style={{ display: 'flex', gap: 8, paddingLeft: 46 }}>
+                  <input className="input" value={settingsName} onChange={e => setSettingsName(e.target.value)} style={{ flex: 1, fontSize: 14, padding: '9px 12px' }} />
+                  <button type="submit" className="btn-primary" style={{ padding: '0 16px', height: 38, whiteSpace: 'nowrap', fontSize: 13 }}>
                     {nameSaved ? t.saved : t.save}
                   </button>
-                </div>
-              </form>
+                </form>
+              </div>
             )}
 
-            {profile && <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 16px' }} />}
+            {/* Purchase history — no backend endpoint exists yet since Razorpay isn't configured */}
+            <button
+              onClick={() => showToast('No purchases yet')}
+              style={{ ...settingsRowStyle, width: '100%', cursor: 'pointer', background: 'none', border: 'none', borderBottom: '1px solid var(--bg-card)', fontFamily: 'inherit' }}
+            >
+              <div style={settingsRowLeftStyle}>
+                <span style={settingsIconStyle}><Receipt size={16} /></span>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={settingsLabelStyle}>Purchase History</div>
+                  <div style={settingsSubStyle}>View past top-ups</div>
+                </div>
+              </div>
+              <ChevronRight size={16} color="var(--text-muted)" />
+            </button>
 
             {/* Logout */}
             {profile && (
               <button
                 onClick={() => { signOut(); setShowSettings(false); }}
-                style={{ width: '100%', padding: '12px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', color: '#C0392B', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                style={{ width: '100%', marginTop: 20, padding: '13px', borderRadius: 10, border: '1px solid var(--border)', background: 'none', color: '#C0392B', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = '#C0392B'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
               >
@@ -730,12 +894,10 @@ export default function GuestRoom() {
 
       {/* ── Error / info toasts (NOT for song-added — that uses confetti popup) ── */}
       {toast && (
-        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: 'var(--bg-card)', border: '1px solid #FF6B35', borderRadius: 999, padding: '10px 20px', fontSize: 14, fontWeight: 600, zIndex: 400, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', color: 'var(--text-primary)', whiteSpace: 'nowrap', maxWidth: 'calc(100vw - 32px)' }}>
+        <div style={{ position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)', background: 'var(--bg-card)', border: '1px solid #FF6B35', borderRadius: 999, padding: '10px 20px', fontSize: 14, fontWeight: 600, zIndex: 400, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', color: 'var(--text-primary)', whiteSpace: 'nowrap', maxWidth: 'calc(100vw - 32px)', fontFamily: GUEST_FONT }}>
           {toast}
         </div>
       )}
-
-      <VersionFooter />
     </div>
   );
 }
