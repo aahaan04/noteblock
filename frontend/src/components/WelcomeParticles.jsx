@@ -31,10 +31,11 @@ function buildNoteSvg(alt) {
   return svg;
 }
 
-// Ambient Minecraft-style particle layer for the welcome screen. Spawns
-// rising musical notes + pixel "block-break" squares from behind the logo
-// on a fixed interval, each removing itself from the DOM once its CSS
-// animation finishes so the particle count never grows unbounded.
+// Ambient particle layer for the welcome screen. Spawns two layers of rising
+// musical notes from behind the logo on a fixed interval — larger orange/tan
+// notes less often, smaller brown/orange notes more frequently — each
+// removing itself from the DOM once its CSS animation finishes so the
+// particle count never grows unbounded.
 export default function WelcomeParticles() {
   const layerRef = useRef(null);
   const countRef = useRef(0);
@@ -74,16 +75,16 @@ export default function WelcomeParticles() {
       if (countRef.current >= MAX_PARTICLES) return;
       const el = document.createElement('div');
       el.className = 'wp-pixel';
-      const size = 3 + Math.random() * 4;
+      el.appendChild(buildNoteSvg(Math.random() > 0.5));
+      const scale = 0.4 + Math.random() * 0.25;
       const xOffset = (Math.random() - 0.5) * 80;
       const drift = (Math.random() - 0.5) * 40;
       const duration = 2 + Math.random() * 1.5;
-      el.style.width = `${size}px`;
-      el.style.height = `${size}px`;
       el.style.left = `calc(50% + ${xOffset}px)`;
       el.style.setProperty('--drift', `${drift}px`);
+      el.style.setProperty('--pixel-scale', scale);
       el.style.animationDuration = `${duration}s`;
-      el.style.background = PIXEL_COLORS[Math.floor(Math.random() * PIXEL_COLORS.length)];
+      el.style.color = PIXEL_COLORS[Math.floor(Math.random() * PIXEL_COLORS.length)];
 
       layer.appendChild(el);
       countRef.current++;
@@ -133,15 +134,14 @@ export default function WelcomeParticles() {
         .wp-pixel {
           position: absolute;
           top: 55%;
-          border-radius: 1px;
           opacity: 0;
           animation: wp-pixel-float linear infinite;
         }
         @keyframes wp-pixel-float {
-          0%   { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+          0%   { transform: translateY(0) translateX(0) rotate(-8deg) scale(var(--pixel-scale)); opacity: 0; }
           10%  { opacity: 1; }
           80%  { opacity: 0.7; }
-          100% { transform: translateY(-120px) translateX(var(--drift)) rotate(180deg); opacity: 0; }
+          100% { transform: translateY(-120px) translateX(var(--drift)) rotate(8deg) scale(var(--pixel-scale)); opacity: 0; }
         }
         @media (prefers-reduced-motion: reduce) {
           .wp-note, .wp-pixel { display: none; }
