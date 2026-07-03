@@ -5,28 +5,30 @@ const NOTE_COLORS = ['#FF6B35', '#C89B6E'];
 const PIXEL_COLORS = ['#8B5A2B', '#6B4226', '#FF6B35', '#C89B6E'];
 const MAX_PARTICLES = 18; // hard cap so the DOM node count never grows unbounded
 
-function buildNoteSvg(alt, size) {
+// Simple single quarter-note glyph — a filled notehead + straight stem, no
+// beam/flag. The earlier two-note "beamed eighth notes" glyph looked fine at
+// button/nav size but its connecting bar and second notehead blur into a
+// shapeless blob once rendered at particle size (10-18px) and rotated
+// mid-flight. A plain circle + rectangle stays crisp and readable at any
+// size, including with mild rotation applied.
+function buildNoteSvg(mirrored, size) {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('fill', 'currentColor');
 
-  const path = document.createElementNS(SVG_NS, 'path');
-  const c1 = document.createElementNS(SVG_NS, 'circle');
-  const c2 = document.createElementNS(SVG_NS, 'circle');
-  if (alt) {
-    path.setAttribute('d', 'M12 18V6l6-1v11');
-    c1.setAttribute('cx', '9'); c1.setAttribute('cy', '18'); c1.setAttribute('r', '3');
-    c2.setAttribute('cx', '15'); c2.setAttribute('cy', '17'); c2.setAttribute('r', '3');
+  const notehead = document.createElementNS(SVG_NS, 'circle');
+  const stem = document.createElementNS(SVG_NS, 'rect');
+  if (mirrored) {
+    notehead.setAttribute('cx', '16'); notehead.setAttribute('cy', '18'); notehead.setAttribute('r', '4.5');
+    stem.setAttribute('x', '18.3'); stem.setAttribute('y', '3'); stem.setAttribute('width', '2.4'); stem.setAttribute('height', '15.5');
   } else {
-    path.setAttribute('d', 'M9 18V5l12-2v13');
-    c1.setAttribute('cx', '6'); c1.setAttribute('cy', '18'); c1.setAttribute('r', '3');
-    c2.setAttribute('cx', '18'); c2.setAttribute('cy', '16'); c2.setAttribute('r', '3');
+    notehead.setAttribute('cx', '8'); notehead.setAttribute('cy', '18'); notehead.setAttribute('r', '4.5');
+    stem.setAttribute('x', '10.3'); stem.setAttribute('y', '3'); stem.setAttribute('width', '2.4'); stem.setAttribute('height', '15.5');
   }
-  svg.appendChild(path);
-  svg.appendChild(c1);
-  svg.appendChild(c2);
+  svg.appendChild(notehead);
+  svg.appendChild(stem);
   return svg;
 }
 
