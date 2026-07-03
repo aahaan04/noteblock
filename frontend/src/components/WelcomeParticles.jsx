@@ -5,11 +5,10 @@ const NOTE_COLORS = ['#FF6B35', '#C89B6E'];
 const PIXEL_COLORS = ['#8B5A2B', '#6B4226', '#FF6B35', '#C89B6E'];
 const MAX_PARTICLES = 18; // hard cap so the DOM node count never grows unbounded
 
-function buildNoteSvg(alt) {
+function buildNoteSvg(alt, size) {
   const svg = document.createElementNS(SVG_NS, 'svg');
-  const size = alt ? '14' : '18';
-  svg.setAttribute('width', size);
-  svg.setAttribute('height', size);
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('fill', 'currentColor');
 
@@ -56,7 +55,8 @@ export default function WelcomeParticles() {
       if (countRef.current >= MAX_PARTICLES) return;
       const el = document.createElement('div');
       el.className = 'wp-note';
-      el.appendChild(buildNoteSvg(Math.random() > 0.5));
+      const alt = Math.random() > 0.5;
+      el.appendChild(buildNoteSvg(alt, alt ? 14 : 18));
 
       const xOffset = (Math.random() - 0.5) * 90;
       const drift = (Math.random() - 0.5) * 50;
@@ -75,14 +75,17 @@ export default function WelcomeParticles() {
       if (countRef.current >= MAX_PARTICLES) return;
       const el = document.createElement('div');
       el.className = 'wp-pixel';
-      el.appendChild(buildNoteSvg(Math.random() > 0.5));
-      const scale = 0.4 + Math.random() * 0.25;
+      const alt = Math.random() > 0.5;
+      // Kept at a size where the notehead/stem are still legible — going
+      // much smaller (or shrinking via a CSS scale transform) just reads as
+      // an indistinct blob, i.e. right back to looking like a plain pixel.
+      const size = 10 + Math.random() * 4;
+      el.appendChild(buildNoteSvg(alt, size));
       const xOffset = (Math.random() - 0.5) * 80;
       const drift = (Math.random() - 0.5) * 40;
       const duration = 2 + Math.random() * 1.5;
       el.style.left = `calc(50% + ${xOffset}px)`;
       el.style.setProperty('--drift', `${drift}px`);
-      el.style.setProperty('--pixel-scale', scale);
       el.style.animationDuration = `${duration}s`;
       el.style.color = PIXEL_COLORS[Math.floor(Math.random() * PIXEL_COLORS.length)];
 
@@ -138,10 +141,10 @@ export default function WelcomeParticles() {
           animation: wp-pixel-float linear infinite;
         }
         @keyframes wp-pixel-float {
-          0%   { transform: translateY(0) translateX(0) rotate(-8deg) scale(var(--pixel-scale)); opacity: 0; }
+          0%   { transform: translateY(0) translateX(0) rotate(-8deg); opacity: 0; }
           10%  { opacity: 1; }
           80%  { opacity: 0.7; }
-          100% { transform: translateY(-120px) translateX(var(--drift)) rotate(8deg) scale(var(--pixel-scale)); opacity: 0; }
+          100% { transform: translateY(-120px) translateX(var(--drift)) rotate(8deg); opacity: 0; }
         }
         @media (prefers-reduced-motion: reduce) {
           .wp-note, .wp-pixel { display: none; }
