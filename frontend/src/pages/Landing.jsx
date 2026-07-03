@@ -70,7 +70,7 @@ export default function Landing() {
 
   // ── Landing screen ────────────────────────────────────────────────────────────
   if (!mode) return (
-    <div className="center-screen" style={{ fontFamily: WELCOME_FONT }}>
+    <div className="center-screen" style={{ fontFamily: WELCOME_FONT, justifyContent: 'flex-start', paddingTop: 'min(18vh, 160px)' }}>
       {/* Glow + particles + floating block — contained to its own box so the
           rise animation has a clear origin without needing a fixed-size frame */}
       <div style={{ position: 'relative', width: 240, height: 200, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
