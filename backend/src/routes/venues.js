@@ -30,7 +30,7 @@ router.get('/room/:roomCode', async (req, res) => {
 
   const { data, error } = await supabaseAdmin
     .from('venues')
-    .select('id, name, room_code, status, welcome_credits, vibe_mode_enabled, jukebox_paused, queue_open_when_paused, vibe_description, vibe_now_playing_title, vibe_now_playing_channel')
+    .select('id, name, room_code, status, welcome_credits, vibe_mode_enabled, jukebox_paused, queue_open_when_paused, vibe_description, vibe_now_playing_title, vibe_now_playing_channel, vibe_now_playing_thumbnail')
     .eq('room_code', code)
     .single();
 
@@ -79,7 +79,7 @@ router.put('/:id', requireAuth, body(schemas.updateVenue), async (req, res) => {
     'vibe_description', 'vibe_playlist_urls', 'vibe_mode_enabled',
     'vibe_current_video_index', 'vibe_current_position_seconds',
     'jukebox_paused', 'queue_open_when_paused', 'vibe_played_video_ids',
-    'vibe_now_playing_title', 'vibe_now_playing_channel',
+    'vibe_now_playing_title', 'vibe_now_playing_channel', 'vibe_now_playing_thumbnail',
   ];
   const updates = {};
   for (const key of allowed) {
@@ -113,7 +113,7 @@ router.get('/:id/banned', async (req, res) => {
 
 // POST /api/venues/:id/banned — ban a song (host only)
 router.post('/:id/banned', requireAuth, body(schemas.banSong), async (req, res) => {
-  const { youtube_video_id, song_title, thumbnail_url } = req.body;
+  const { youtube_video_id, song_title, thumbnail_url, channel } = req.body;
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
@@ -125,7 +125,7 @@ router.post('/:id/banned', requireAuth, body(schemas.banSong), async (req, res) 
 
   const { data, error } = await supabaseAdmin
     .from('banned_songs')
-    .insert({ venue_id: req.params.id, youtube_video_id, song_title, thumbnail_url })
+    .insert({ venue_id: req.params.id, youtube_video_id, song_title, thumbnail_url, channel })
     .select()
     .single();
 

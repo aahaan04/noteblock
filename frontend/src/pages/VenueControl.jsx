@@ -9,10 +9,16 @@ import {
 
 const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
+const HOST_FONT = "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+// Bumped from 768 to 1024 so the two-column desktop layout only applies on
+// genuinely wide viewports — tablets now get the (already mobile-tuned)
+// stacked layout instead of a cramped two-column squeeze, matching how the
+// guest UI treats <=1024 as "mobile" for background-audio purposes too.
 function useIsMobile() {
-  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+  const [mobile, setMobile] = useState(() => window.innerWidth < 1024);
   useEffect(() => {
-    const fn = () => setMobile(window.innerWidth < 768);
+    const fn = () => setMobile(window.innerWidth < 1024);
     window.addEventListener('resize', fn);
     return () => window.removeEventListener('resize', fn);
   }, []);
@@ -29,6 +35,7 @@ import Visualizer from '../components/Visualizer.jsx';
 import QueueDisplay from '../components/QueueDisplay.jsx';
 import VenueQRCode from '../components/VenueQRCode.jsx';
 import SongSearch from '../components/SongSearch.jsx';
+import SongThumb from '../components/SongThumb.jsx';
 
 export default function VenueControl() {
   const { id } = useParams();
@@ -68,10 +75,14 @@ export default function VenueControl() {
   useEffect(() => {
     if (!id || !token) return;
     if (nowPlaying?.type === 'vibe' && nowPlaying.videoId) {
-      const channel = vibeVideos.find(v => v.videoId === nowPlaying.videoId)?.channel ?? null;
-      api.venues.update(id, { vibe_now_playing_title: nowPlaying.title ?? null, vibe_now_playing_channel: channel }, token).catch(() => {});
+      const match = vibeVideos.find(v => v.videoId === nowPlaying.videoId);
+      api.venues.update(id, {
+        vibe_now_playing_title: nowPlaying.title ?? null,
+        vibe_now_playing_channel: match?.channel ?? null,
+        vibe_now_playing_thumbnail: match?.thumbnail ?? null,
+      }, token).catch(() => {});
     } else if (nowPlaying?.type !== 'vibe') {
-      api.venues.update(id, { vibe_now_playing_title: null, vibe_now_playing_channel: null }, token).catch(() => {});
+      api.venues.update(id, { vibe_now_playing_title: null, vibe_now_playing_channel: null, vibe_now_playing_thumbnail: null }, token).catch(() => {});
     }
   }, [nowPlaying?.videoId]); // eslint-disable-line
 
@@ -262,61 +273,68 @@ export default function VenueControl() {
   // Player panel — shared between mobile and desktop
   const playerPanel = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Player + Visualizer stacked */}
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
-        {/* Hidden YouTube players — always in DOM */}
-        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0, opacity: 0, pointerEvents: 'none' }}>
-          <CrossfadePlayer
-            ref={playerRef} queue={queue} vibeVideos={vibeVideos}
-            vibeEnabled={venue.vibe_mode_enabled} crossfadeSecs={venue.crossfade_duration_seconds}
-            jukeboxPaused={venue.jukebox_paused ?? false}
-            vibePlayedIds={vibePlayedIds}
-            onMarkPlaying={handleMarkPlaying} onMarkPlayed={handleMarkPlayed}
-            onNowPlaying={setNowPlaying} onVibeActive={setVibeActive}
-            onVibePlayed={handleVibePlayed} venueId={id}
-          />
+      {/* Visualizer box — one bordered card containing the canvas + song info,
+          matching the mockup's combined .visualizer-box treatment */}
+      <div style={{
+        background: 'radial-gradient(ellipse at center, rgba(255,107,53,0.10) 0%, var(--bg-page) 70%)',
+        border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden',
+      }}>
+        {/* Player + Visualizer stacked */}
+        <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
+          {/* Hidden YouTube players — always in DOM */}
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0, opacity: 0, pointerEvents: 'none' }}>
+            <CrossfadePlayer
+              ref={playerRef} queue={queue} vibeVideos={vibeVideos}
+              vibeEnabled={venue.vibe_mode_enabled} crossfadeSecs={venue.crossfade_duration_seconds}
+              jukeboxPaused={venue.jukebox_paused ?? false}
+              vibePlayedIds={vibePlayedIds}
+              onMarkPlaying={handleMarkPlaying} onMarkPlayed={handleMarkPlayed}
+              onNowPlaying={setNowPlaying} onVibeActive={setVibeActive}
+              onVibePlayed={handleVibePlayed} venueId={id}
+            />
+          </div>
+          {/* Visualizer on top — purely cosmetic */}
+          <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
+            <Visualizer
+              isPlaying={!!(nowPlaying || vibeActive) && !venue.jukebox_paused}
+              songTitle={nowPlayingTitle}
+              requester={nowPlayingRequester}
+            />
+          </div>
         </div>
-        {/* Visualizer on top — purely cosmetic */}
-        <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
-          <Visualizer
-            isPlaying={!!(nowPlaying || vibeActive) && !venue.jukebox_paused}
-            songTitle={nowPlayingTitle}
-            requester={nowPlayingRequester}
-          />
-        </div>
+        {/* Song info bar below visualizer, inside the same bordered box */}
+        {!venue.jukebox_paused && (nowPlayingTitle || vibeActive) && (
+          <div style={{ padding: '12px 16px 16px', minWidth: 0, textAlign: 'center' }}>
+            {nowPlaying?.type === 'vibe' ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: 3 }}>
+                  <Radio size={12} color="var(--text-secondary)" />
+                  <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>{t.vibeModeLabel}</span>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {nowPlayingTitle ?? <span style={{ color: 'var(--text-muted)' }}>{t.loading}</span>}
+                </div>
+                {vibeChannel && <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>{vibeChannel}</div>}
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {decode(nowPlayingTitle)}
+                </div>
+                {nowPlayingRequester && (
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>by {nowPlayingRequester}</div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
-      {/* Song info bar below visualizer */}
-      {!venue.jukebox_paused && (nowPlayingTitle || vibeActive) && (
-        <div style={{ padding: '4px 0', minWidth: 0 }}>
-          {nowPlaying?.type === 'vibe' ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                <Radio size={12} color="var(--text-secondary)" />
-                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>{t.vibeModeLabel}</span>
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {nowPlayingTitle ?? <span style={{ color: 'var(--text-muted)' }}>{t.loading}</span>}
-              </div>
-              {vibeChannel && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{vibeChannel}</div>}
-            </>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                {decode(nowPlayingTitle)}
-              </div>
-              {nowPlayingRequester && (
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', flexShrink: 0 }}>by {nowPlayingRequester}</div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 12 }}>
+      <div style={{ display: 'flex', gap: 10 }}>
         <button
           onClick={() => handleVenueUpdate({ jukebox_paused: !venue.jukebox_paused })}
           style={{
-            flex: 1, height: 52, borderRadius: 8, border: '1px solid var(--border)',
-            background: 'var(--btn-normal)', color: 'var(--text-primary)', fontWeight: 700, fontSize: 14,
+            flex: 1, height: 48, borderRadius: 9, border: '1px solid #3D2B1A',
+            background: 'var(--border)', color: 'var(--text-primary)', fontWeight: 700, fontSize: 14,
             fontFamily: 'inherit', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
           }}
@@ -327,7 +345,7 @@ export default function VenueControl() {
           <button
             onClick={() => playerRef.current?.start()}
             style={{
-              flex: 1, height: 52, borderRadius: 8, border: 'none',
+              flex: 1, height: 48, borderRadius: 9, border: 'none',
               background: '#22c55e', color: 'var(--bg-app)', fontWeight: 700, fontSize: 14,
               fontFamily: 'inherit', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
@@ -341,8 +359,8 @@ export default function VenueControl() {
           <button
             onClick={handleSkip} disabled={skipping}
             style={{
-              flex: 1, height: 52, borderRadius: 8, border: 'none',
-              background: '#FF6B35', color: 'var(--bg-app)', fontWeight: 700, fontSize: 14,
+              flex: 1, height: 48, borderRadius: 9, border: 'none',
+              background: '#FF6B35', color: '#0E0A07', fontWeight: 800, fontSize: 14,
               fontFamily: 'inherit', cursor: skipping ? 'default' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
               boxShadow: '0 0 14px rgba(255,107,53,0.4)',
@@ -355,14 +373,14 @@ export default function VenueControl() {
       </div>
       {venue.jukebox_paused && (
         venue.queue_open_when_paused ? (
-          <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.4)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
+          <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.4)', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
             <ListMusic size={18} color="#34d399" style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 13, color: '#34d399', fontWeight: 600 }}>{t.guestsCanQueuePaused}</span>
+            <span style={{ fontSize: 12, color: '#34d399', fontWeight: 600, lineHeight: 1.4 }}>{t.guestsCanQueuePaused}</span>
           </div>
         ) : (
-          <div style={{ background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.4)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
+          <div style={{ background: '#2A1408', border: '1px solid #FF6B35', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
             <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 13, color: '#FF6B35', fontWeight: 600 }}>{t.guestsCannotRequest}</span>
+            <span style={{ fontSize: 12, color: 'var(--credits)', fontWeight: 600, lineHeight: 1.4 }}>{t.guestsCannotRequest}</span>
           </div>
         )
       )}
@@ -372,14 +390,19 @@ export default function VenueControl() {
   // Tab content
   const tabContent = (
     <>
-      {tab === 'queue'  && <QueueDisplay items={queue} isHost onRemove={handleRemove} />}
+      {tab === 'queue' && (
+        <>
+          {!isMobile && <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 20 }}>Up Next</div>}
+          <QueueDisplay items={queue} isHost onRemove={handleRemove} />
+        </>
+      )}
       {tab === 'vibe'   && <VibeSettings venue={venue} onUpdate={handleVenueUpdate} vibePlayedCount={vibePlayedIds.length} onResetVibeHistory={() => { setVibePlayedIds([]); handleVenueUpdate({ vibe_played_video_ids: [] }); }} />}
       {tab === 'ban'    && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />}
       {tab === 'users'  && <UsersPanel venueId={id} token={token} />}
       {tab === 'stats'  && <StatsPanel stats={stats} />}
       {tab === 'qr'     && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 24 }}>
-          <VenueQRCode roomCode={venue.room_code} size={248} />
+          <VenueQRCode roomCode={venue.room_code} size={260} />
         </div>
       )}
     </>
@@ -388,27 +411,39 @@ export default function VenueControl() {
   // ── Top bar ───────────────────────────────────────────────────────────────────
   const topBar = (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      padding: isMobile ? '10px 12px' : '12px 20px',
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: isMobile ? '10px 12px' : '16px 24px',
       background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', flexShrink: 0,
     }}>
-      <button onClick={() => navigate('/host/dashboard')} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}>
-        <ArrowLeft size={20} />
+      <button onClick={() => navigate('/host/dashboard')} style={{
+        width: 34, height: 34, borderRadius: 10, border: 'none', background: 'var(--border)',
+        color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        <ArrowLeft size={17} />
       </button>
       {!isMobile && <Logo size={26} />}
-      <h1 style={{ margin: 0, fontSize: isMobile ? 15 : 18, fontWeight: 800, flex: 1, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <h1 style={{ margin: 0, fontSize: isMobile ? 15 : 17, fontWeight: 800, flex: 1, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.3px' }}>
         {venue.name}
       </h1>
       <span style={{
-        fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, flexShrink: 0,
-        background: isActive ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
-        color: isActive ? '#34d399' : '#f87171',
+        display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+        fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 999,
+        background: isActive ? 'rgba(34,197,94,0.12)' : 'var(--border)',
+        border: isActive ? '1px solid rgba(34,197,94,0.3)' : 'none',
+        color: isActive ? '#4ADE80' : 'var(--text-muted)',
       }}>
+        {isActive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ADE80' }} />}
         {isActive ? t.active : t.closed}
       </span>
       {vibeActive && !isMobile && <span style={{ fontSize: 12, color: '#FF6B35', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}><Music size={13} /> Vibe</span>}
-      <button className="btn-secondary" style={{ fontSize: isMobile ? 11 : 12, padding: isMobile ? '6px 10px' : undefined, flexShrink: 0 }}
-        onClick={() => handleVenueUpdate({ status: isActive ? 'closed' : 'active' })}>
+      <button
+        onClick={() => handleVenueUpdate({ status: isActive ? 'closed' : 'active' })}
+        style={{
+          background: 'var(--border)', border: '1px solid #3D2B1A', borderRadius: 9,
+          color: 'var(--text-primary)', cursor: 'pointer', fontFamily: 'inherit',
+          fontSize: isMobile ? 11 : 13, fontWeight: 700, padding: isMobile ? '7px 10px' : '9px 16px', flexShrink: 0,
+        }}
+      >
         {isActive ? (isMobile ? 'Close' : t.closeRoom) : (isMobile ? 'Open' : t.openRoomAction)}
       </button>
     </div>
@@ -432,11 +467,11 @@ export default function VenueControl() {
     const activeMainTab = ['vibe', 'ban', 'stats'].includes(tab) ? 'manage' : tab === 'player' ? 'player' : tab;
 
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-app)' }}>
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-app)', fontFamily: HOST_FONT }}>
         {topBar}
 
         {/* Scrollable content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px 0' }}>
+        <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '14px 14px 0' }}>
           {/* Android Chrome restore banner — only shown when a recent interrupted session is found */}
           {resumeBanner && activeMainTab === 'player' && (
             <div style={{
@@ -528,31 +563,35 @@ export default function VenueControl() {
   ];
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-app)' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-app)', fontFamily: HOST_FONT }}>
       {topBar}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Left — player */}
-        <div style={{ flex: '0 0 480px', padding: 20, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', borderRight: '1px solid var(--border)' }}>
+        {/* Left — player, persistent across all tabs */}
+        <div className="no-scrollbar" style={{ width: 380, flexShrink: 0, padding: 20, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', background: 'var(--bg-card)', borderRight: '1px solid var(--border)' }}>
           {playerPanel}
         </div>
         {/* Right — tabs */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', gap: 4, padding: '12px 16px', borderBottom: '1px solid var(--border)', overflowX: 'auto', flexShrink: 0 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+          <div className="no-scrollbar" style={{ display: 'flex', gap: 6, padding: '16px 24px', borderBottom: '1px solid var(--border)', overflowX: 'auto', flexShrink: 0 }}>
             {desktopTabs.map(({ key, icon, label }) => (
               <button key={key}
                 onClick={() => { setTab(key); if (key === 'stats') loadStats(); }}
                 style={{
-                  padding: '6px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                  background: tab === key ? '#FF6B35' : 'var(--bg-card)',
-                  color: tab === key ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
-                  display: 'flex', alignItems: 'center', gap: 5,
-                }}>
+                  padding: '9px 16px', borderRadius: 9, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  background: tab === key ? '#FF6B35' : 'transparent',
+                  color: tab === key ? '#0E0A07' : 'var(--text-secondary)',
+                  fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => { if (tab !== key) e.currentTarget.style.background = 'var(--bg-card)'; }}
+                onMouseLeave={e => { if (tab !== key) e.currentTarget.style.background = 'transparent'; }}
+              >
                 {icon} {label}
               </button>
             ))}
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '26px 28px' }}>
             {tabContent}
           </div>
         </div>
@@ -563,33 +602,45 @@ export default function VenueControl() {
 
 // ── Toggle component ──────────────────────────────────────────────────────────
 
+// Bare toggle row — meant to sit directly inside a settings-block card
+// (matching the mockup's .toggle-row, which has no border/background of its own).
 function Toggle({ checked, onChange, label, description }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-      gap: 16, padding: '14px 16px',
-      background: 'var(--bg-app)', border: '1px solid var(--border)', borderRadius: 10,
-    }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
       <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 3 }}>{label}</div>
-        {description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{description}</div>}
+        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{label}</div>
+        {description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, lineHeight: 1.5, marginTop: 4, maxWidth: 380 }}>{description}</div>}
       </div>
-      {/* iOS-style pill toggle */}
       <button
         onClick={onChange}
         style={{
-          flexShrink: 0, width: 48, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer',
+          flexShrink: 0, width: 44, height: 26, borderRadius: 13,
+          border: `1px solid ${checked ? '#FF6B35' : '#3D2B1A'}`, cursor: 'pointer',
           background: checked ? '#FF6B35' : 'var(--border)',
           position: 'relative', transition: 'background 0.2s',
           padding: 0,
         }}
       >
         <span style={{
-          position: 'absolute', top: 4, left: checked ? 24 : 4,
-          width: 20, height: 20, borderRadius: '50%', background: 'var(--text-primary)',
+          position: 'absolute', top: 3, left: checked ? 22 : 3,
+          width: 18, height: 18, borderRadius: '50%', background: checked ? '#0E0A07' : 'var(--text-primary)',
           transition: 'left 0.2s', display: 'block',
         }} />
       </button>
+    </div>
+  );
+}
+
+// Card wrapper for grouped settings sections, matching mockup's .settings-block.
+function SettingsBlock({ label, children }) {
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: 18 }}>
+      {label && (
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 14 }}>
+          {label}
+        </div>
+      )}
+      {children}
     </div>
   );
 }
@@ -635,20 +686,17 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 520 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
 
-      {/* ── Pre-event queuing ── */}
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-          {t.guestRequests}
-        </div>
+      {/* ── Guest requests ── */}
+      <SettingsBlock label={t.guestRequests}>
         <Toggle
           checked={queueWhenPaused}
           onChange={requestQueueToggle}
           label={t.allowQueueWhenPaused}
           description={t.allowQueueWhenPausedDesc}
         />
-      </div>
+      </SettingsBlock>
 
       {/* Confirmation toast */}
       {pendingToggle && (
@@ -673,71 +721,51 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
         </div>
       )}
 
-      <div style={{ height: 1, background: 'var(--border)' }} />
-
       {/* ── Vibe mode ── */}
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-          {t.vibeModeLabel}
-        </div>
+      <SettingsBlock label={t.vibeModeLabel}>
         <Toggle
           checked={enabled}
           onChange={() => setEnabled(v => !v)}
           label={t.enableVibe}
           description="Auto-play background music from a playlist or description when the queue is empty."
         />
-      </div>
-
-      <div>
-        <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{t.vibeDescription}</label>
-        <input className="input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. upbeat party hits, 2000s pop, lofi chill" />
-      </div>
-
-      <div>
-        <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{t.vibePlaylistUrls}</label>
+        <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginTop: 16, marginBottom: 2 }}>{t.vibeDescription}</label>
+        <input className="input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. upbeat party hits, 2000s pop, lofi chill"
+          style={{ marginTop: 10, background: 'var(--bg-page)', fontSize: 13, fontWeight: 600 }} />
+        <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginTop: 16, marginBottom: 2 }}>{t.vibePlaylistUrls}</label>
         <textarea className="input" value={urls} onChange={e => setUrls(e.target.value)} rows={3}
-          placeholder="https://youtube.com/playlist?list=..." style={{ resize: 'vertical' }} />
-      </div>
-
-      {vibePlayedCount > 0 && (
-        <button
-          onClick={onResetVibeHistory}
-          style={{
-            background: 'none', border: '1px solid var(--border)', borderRadius: 8,
-            color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit',
-            fontSize: 13, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 6,
-            alignSelf: 'flex-start',
-            transition: 'border-color 0.15s, color 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF6B35'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-        >
-          <RefreshCw size={14} /> {t.resetVibeHistory} ({vibePlayedCount})
-        </button>
-      )}
-
-      <div style={{ height: 1, background: 'var(--border)' }} />
+          placeholder="https://youtube.com/playlist?list=..." style={{ marginTop: 10, background: 'var(--bg-page)', fontSize: 13, fontWeight: 600, resize: 'vertical' }} />
+        {vibePlayedCount > 0 && (
+          <button
+            onClick={onResetVibeHistory}
+            style={{
+              background: 'none', border: '1px solid var(--border)', borderRadius: 8,
+              color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: 13, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 6,
+              marginTop: 16,
+              transition: 'border-color 0.15s, color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF6B35'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+          >
+            <RefreshCw size={14} /> {t.resetVibeHistory} ({vibePlayedCount})
+          </button>
+        )}
+      </SettingsBlock>
 
       {/* ── Playback & credits ── */}
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-          {t.playbackCredits}
+      <SettingsBlock label={t.playbackCredits}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+          <span>{t.crossfadeDuration}</span><span style={{ color: '#FF6B35' }}>{crossfade}s</span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-              {t.crossfadeDuration}: <strong style={{ color: 'var(--text-primary)' }}>{crossfade}s</strong>
-            </label>
-            <input type="range" min={2} max={10} value={crossfade} onChange={e => setCrossfade(e.target.value)} style={{ width: '100%', accentColor: '#FF6B35' }} />
-          </div>
-          <div>
-            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{t.welcomeCredits}</label>
-            <input className="input" type="number" min={0} max={100} value={welcome} onChange={e => setWelcome(e.target.value)} style={{ width: 120 }} />
-          </div>
-        </div>
-      </div>
+        <input type="range" min={2} max={10} value={crossfade} onChange={e => setCrossfade(e.target.value)}
+          style={{ width: '100%', accentColor: '#FF6B35', marginTop: 10 }} />
+        <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginTop: 16, marginBottom: 2 }}>{t.welcomeCredits}</label>
+        <input className="input" type="number" min={0} max={100} value={welcome} onChange={e => setWelcome(e.target.value)}
+          style={{ width: 120, marginTop: 10, background: 'var(--bg-page)', fontSize: 13, fontWeight: 600 }} />
+      </SettingsBlock>
 
-      <button className="btn-primary" onClick={save} disabled={saving} style={{ alignSelf: 'flex-start', padding: '10px 24px' }}>
+      <button className="btn-primary" onClick={save} disabled={saving} style={{ alignSelf: 'flex-start', padding: '12px 28px' }}>
         <Save size={15} /> {saving ? t.loading : t.save}
       </button>
     </div>
@@ -751,7 +779,7 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
   const [selected, setSelected] = useState(null);
 
   async function handleBan(song) {
-    await api.venues.banned.add(venueId, { youtube_video_id: song.videoId, song_title: song.title, thumbnail_url: song.thumbnail }, token).catch(() => {});
+    await api.venues.banned.add(venueId, { youtube_video_id: song.videoId, song_title: song.title, thumbnail_url: song.thumbnail, channel: song.channel }, token).catch(() => {});
     onReload(); setSelected(null);
   }
   async function handleUnban(bid) {
@@ -761,7 +789,9 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
 
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>{t.banSong}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 20 }}>
+        {t.banSong}
+      </div>
       <SongSearch bannedIds={bannedIds} onSelect={setSelected} />
 
       {selected && (
@@ -778,18 +808,24 @@ function BanManager({ venueId, token, banned, bannedIds, onReload }) {
         </div>
       )}
 
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '24px 0 10px' }}>{t.bannedSongs}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '28px 0 16px' }}>
+        <span style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)' }}>{t.bannedSongs}</span>
+        <span style={{ background: 'var(--border)', color: 'var(--text-secondary)', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>{banned.length}</span>
+      </div>
       {!banned.length && (
-        <div style={{ textAlign: 'center', padding: '20px 0' }}>
-          <ShieldOff size={40} color="var(--border)" style={{ marginBottom: 8 }} />
-          <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t.noSongsBanned}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center' }}>
+          <ShieldOff size={40} color="var(--border)" style={{ marginBottom: 14 }} />
+          <div style={{ color: 'var(--text-muted)', fontSize: 14, fontWeight: 600 }}>{t.noSongsBanned}</div>
         </div>
       )}
       {banned.map(b => (
-        <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 12px', marginBottom: 8 }}>
-          {b.thumbnail_url && <img src={b.thumbnail_url} alt="" style={{ width: 40, height: 30, objectFit: 'cover', borderRadius: 4 }} />}
-          <span style={{ flex: 1, fontSize: 14, color: 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(b.song_title)}</span>
-          <button onClick={() => handleUnban(b.id)} style={{ background: 'none', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6, color: '#f87171', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', padding: '3px 10px' }}>
+        <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
+          <SongThumb src={b.thumbnail_url} size={40} radius={7} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(b.song_title)}</div>
+            {b.channel && <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{decode(b.channel)}</div>}
+          </div>
+          <button onClick={() => handleUnban(b.id)} style={{ marginLeft: 'auto', background: 'var(--border)', border: '1px solid #3D2B1A', borderRadius: 8, color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', padding: '7px 13px', flexShrink: 0 }}>
             {t.unban}
           </button>
         </div>
@@ -805,18 +841,16 @@ function StatsPanel({ stats }) {
   if (!stats) return <p style={{ color: 'var(--text-secondary)' }}>{t.loading}</p>;
   return (
     <div>
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         <StatCard label={t.requestsToday} value={stats.totalRequests} />
         <StatCard label={t.creditsDistributed} value={stats.totalCredits} />
       </div>
-      <h3 style={{ color: 'var(--text-primary)', marginTop: 0, marginBottom: 12 }}>{t.topSongs}</h3>
+      <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 16 }}>{t.topSongs}</div>
       {stats.topSongs.map((s, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--border)', fontSize: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            <span style={{ color: 'var(--text-muted)', fontFamily: 'monospace', minWidth: 18, fontSize: 13 }}>{i + 1}</span>
-            <span style={{ color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(s.title)}</span>
-          </div>
-          <span style={{ background: 'var(--border)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0, marginLeft: 8 }}>{s.count}x</span>
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--bg-page)' }}>
+          <span style={{ color: 'var(--text-muted)', fontWeight: 800, fontSize: 14, width: 20 }}>{i + 1}</span>
+          <span style={{ flex: 1, color: 'var(--text-primary)', fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decode(s.title)}</span>
+          <span style={{ background: 'var(--border)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, flexShrink: 0 }}>{s.count}×</span>
         </div>
       ))}
     </div>
@@ -825,9 +859,9 @@ function StatsPanel({ stats }) {
 
 function StatCard({ label, value }) {
   return (
-    <div style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', textAlign: 'center' }}>
-      <div style={{ fontSize: 36, fontWeight: 800, color: '#FF6B35' }}>{value}</div>
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, textTransform: 'uppercase', letterSpacing: 2 }}>{label}</div>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: 24, textAlign: 'center' }}>
+      <div style={{ fontSize: 32, fontWeight: 800, color: '#FF6B35', letterSpacing: '-1px' }}>{value}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 6, textTransform: 'uppercase', letterSpacing: 1.5 }}>{label}</div>
     </div>
   );
 }
@@ -963,29 +997,31 @@ function UsersPanel({ venueId, token }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h3 style={{ margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Users size={18} color="#FF6B35" /> {t.roomUsers}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Users size={17} />
+          {t.roomUsers}
           {onlineUsers.length > 0 && (
-            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
               {onlineUsers.length} online
             </span>
           )}
-        </h3>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {['all', 'banned'].map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{
-              padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-              background: filter === f ? '#FF6B35' : 'var(--bg-card)',
-              color: filter === f ? 'var(--text-primary)' : 'var(--text-secondary)',
-            }}>
-              {f === 'all' ? `All (${allUsers.length})` : `Banned (${allUsers.filter(u => u.banned).length})`}
-            </button>
-          ))}
-          <button onClick={load} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            <RefreshCw size={13} />
-          </button>
         </div>
+        <button onClick={load} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'var(--border)', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <RefreshCw size={14} />
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        {['all', 'banned'].map(f => (
+          <button key={f} onClick={() => setFilter(f)} style={{
+            padding: '7px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+            background: filter === f ? '#FF6B35' : 'var(--border)',
+            color: filter === f ? '#0E0A07' : 'var(--text-secondary)',
+          }}>
+            {f === 'all' ? `All (${allUsers.length})` : `Banned (${allUsers.filter(u => u.banned).length})`}
+          </button>
+        ))}
       </div>
 
       {!displayed.length && (
@@ -1000,19 +1036,19 @@ function UsersPanel({ venueId, token }) {
           const initial = u.name && u.name !== 'Guest' ? u.name[0].toUpperCase() : '?';
           return (
             <div key={u.name} style={{
-              display: 'flex', alignItems: 'center', gap: 12,
+              display: 'flex', alignItems: 'center', gap: 14,
               background: u.banned ? 'rgba(248,113,113,0.06)' : 'var(--bg-card)',
               border: `1px solid ${u.banned ? 'rgba(248,113,113,0.3)' : isOnline ? 'rgba(52,211,153,0.25)' : 'var(--border)'}`,
-              borderRadius: 10, padding: '10px 14px', position: 'relative',
+              borderRadius: 12, padding: 14, position: 'relative',
             }}>
               {/* Avatar with online dot */}
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 <div style={{
-                  width: 36, height: 36, borderRadius: '50%',
-                  background: u.banned ? 'rgba(248,113,113,0.15)' : u.isRegistered ? 'rgba(255,107,53,0.15)' : 'rgba(90,69,53,0.3)',
+                  width: 38, height: 38, borderRadius: '50%',
+                  background: u.banned ? 'rgba(248,113,113,0.15)' : u.isRegistered ? 'var(--brown)' : 'rgba(90,69,53,0.3)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 15, fontWeight: 700,
-                  color: u.banned ? '#f87171' : u.isRegistered ? '#FF6B35' : '#8B6F52',
+                  fontSize: 14, fontWeight: 800,
+                  color: u.banned ? '#f87171' : 'var(--text-primary)',
                 }}>
                   {u.banned ? <Ban size={16} /> : initial}
                 </div>
@@ -1027,23 +1063,25 @@ function UsersPanel({ venueId, token }) {
 
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160, color: 'var(--text-primary)' }}>
                     {u.name || 'Anonymous'}
                   </span>
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999,
-                    background: 'rgba(255,107,53,0.15)', color: '#FF6B35',
-                  }}>
-                    {u.isRegistered ? 'Verified' : 'User'}
-                  </span>
+                  {u.isRegistered && (
+                    <span style={{
+                      fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 5,
+                      background: 'var(--brown)', color: 'var(--credits)',
+                    }}>
+                      Verified
+                    </span>
+                  )}
                   {u.banned && (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, background: 'rgba(248,113,113,0.2)', color: '#f87171' }}>
+                    <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 5, background: 'rgba(248,113,113,0.2)', color: '#f87171' }}>
                       BANNED
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, marginTop: 2 }}>
                   {u.onlineOnly ? 'Just joined · no requests yet' : `${u.requests} ${u.requests === 1 ? 'song' : 'songs'} · ${u.credits} credits spent`}
                 </div>
               </div>
@@ -1053,9 +1091,9 @@ function UsersPanel({ venueId, token }) {
                 <button
                   onClick={() => setOpenMenu(openMenu === u.name ? null : u.name)}
                   style={{
-                    width: 32, height: 32, borderRadius: 7, border: '1px solid var(--border)',
-                    background: openMenu === u.name ? '#FF6B35' : 'var(--bg-card)',
-                    color: openMenu === u.name ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    width: 32, height: 32, borderRadius: 8, border: 'none',
+                    background: openMenu === u.name ? '#FF6B35' : 'var(--border)',
+                    color: openMenu === u.name ? '#0E0A07' : 'var(--text-secondary)',
                     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}
                 >

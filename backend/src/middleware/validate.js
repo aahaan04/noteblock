@@ -45,6 +45,7 @@ export const schemas = {
     vibe_played_video_ids: z.array(z.string().max(30)).max(2000).optional(),
     vibe_now_playing_title: z.string().trim().max(300).nullable().optional(),
     vibe_now_playing_channel: z.string().trim().max(200).nullable().optional(),
+    vibe_now_playing_thumbnail: optUrl,
   }).strict(),
 
   // POST /api/venues/:id/banned (songs)
@@ -52,6 +53,7 @@ export const schemas = {
     youtube_video_id: videoId,
     song_title: z.string().trim().max(300).optional(),
     thumbnail_url: optUrl,
+    channel: z.string().trim().max(200).nullable().optional(),
   }),
 
   // POST /api/venues/:id/gift

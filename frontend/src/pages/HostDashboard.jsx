@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, Plus, QrCode, Home } from 'lucide-react';
+import { Settings, Plus, QrCode, Home, Users, ListMusic, Radio } from 'lucide-react';
+
+const HOST_FONT = "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 480);
@@ -36,6 +38,8 @@ export default function HostDashboard() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [expandedQR, setExpandedQR] = useState(null);
+  const [queueCounts, setQueueCounts] = useState({});  // venueId -> pending queue count
+  const [onlineCounts, setOnlineCounts] = useState({}); // venueId -> live connected guest count
 
   useEffect(() => {
     if (user) loadVenues();
@@ -45,12 +49,59 @@ export default function HostDashboard() {
     setLoading(true);
     const { data, error } = await supabase
       .from('venues')
-      .select('id, host_id, name, room_code, status')
+      .select('id, host_id, name, room_code, status, vibe_mode_enabled')
       .eq('host_id', user.id)
       .order('created_at', { ascending: false });
     if (!error) setVenues(data ?? []);
     setLoading(false);
   }
+
+  const venueIdsKey = venues.map(v => v.id).join(',');
+
+  // Live pending-queue count per venue, kept fresh via realtime subscription.
+  useEffect(() => {
+    if (!venues.length) return;
+    let cancelled = false;
+    async function loadQueueCounts() {
+      const { data } = await supabase
+        .from('queue_items')
+        .select('venue_id')
+        .in('venue_id', venues.map(v => v.id))
+        .eq('status', 'pending');
+      if (cancelled) return;
+      const counts = {};
+      for (const row of data ?? []) counts[row.venue_id] = (counts[row.venue_id] ?? 0) + 1;
+      setQueueCounts(counts);
+    }
+    loadQueueCounts();
+    const sub = supabase
+      .channel('host-dashboard-queue-counts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_items' }, () => loadQueueCounts())
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(sub); };
+  }, [venueIdsKey]); // eslint-disable-line
+
+  // Live connected-guest count per venue via Supabase Presence (same channel
+  // naming convention used in GuestRoom/VenueControl's Users tab).
+  useEffect(() => {
+    if (!venues.length) return;
+    const channels = venues.map(v => {
+      const ch = supabase.channel(`presence-${v.id}`);
+      const sync = () => {
+        const state = ch.presenceState();
+        const all = Object.values(state).flat();
+        const seen = new Set();
+        const unique = all.filter(p => { if (seen.has(p.name)) return false; seen.add(p.name); return true; });
+        setOnlineCounts(prev => ({ ...prev, [v.id]: unique.length }));
+      };
+      ch.on('presence', { event: 'sync' }, sync)
+        .on('presence', { event: 'join' }, sync)
+        .on('presence', { event: 'leave' }, sync)
+        .subscribe();
+      return ch;
+    });
+    return () => channels.forEach(ch => supabase.removeChannel(ch));
+  }, [venueIdsKey]); // eslint-disable-line
 
   async function createVenue(e) {
     e.preventDefault();
@@ -60,7 +111,7 @@ export default function HostDashboard() {
     const { data, error } = await supabase
       .from('venues')
       .insert({ host_id: user.id, name: newName.trim(), room_code: makeRoomCode(), welcome_credits: 10, crossfade_duration_seconds: 5 })
-      .select().single();
+      .select('id, host_id, name, room_code, status, vibe_mode_enabled').single();
     if (error) { setCreateError(error.message); } else {
       setVenues(prev => [data, ...prev]);
       setNewName(''); setShowCreate(false);
@@ -68,127 +119,163 @@ export default function HostDashboard() {
     setCreating(false);
   }
 
+  const activeCount = venues.filter(v => v.status === 'active').length;
+
   return (
-    <div style={{
-      maxWidth: 800, margin: '0 auto', padding: '20px 16px', minHeight: '100vh',
-      background: 'radial-gradient(ellipse at 50% 30%, rgba(255,107,53,0.04) 0%, transparent 60%), var(--bg-app)',
-    }}>
-
-      {/* ── Header ── */}
-      <div style={{ marginBottom: 28 }}>
-        {/* Top row: logo + settings icon only */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-page)', fontFamily: HOST_FONT }}>
+      {/* ── Top bar ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: isMobile ? '14px 16px' : '18px 28px',
+        background: 'var(--bg-card)', borderBottom: '1px solid var(--border)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
           <Logo size={30} />
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            Noteblock
-          </h1>
-          <button
-            onClick={() => navigate('/settings')}
-            style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center', flexShrink: 0 }}
-            title={t.settings}
-          >
-            <Settings size={18} />
-          </button>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Noteblock
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{profile?.display_name}</div>
+          </div>
         </div>
-        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13, paddingLeft: 40 }}>{profile?.display_name}</p>
-      </div>
-
-      {/* ── Venues header ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{t.myVenues}</h2>
-        <button className="btn-primary" onClick={() => { setShowCreate(true); setCreateError(''); }}
-          style={{ fontSize: 13, padding: '9px 16px', boxShadow: '0 0 16px rgba(255,107,53,0.35)' }}>
-          <Plus size={15} /> {t.createVenue}
+        <button
+          onClick={() => navigate('/settings')}
+          style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'var(--border)', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+          title={t.settings}
+        >
+          <Settings size={16} />
         </button>
       </div>
 
-      {/* ── Create form ── */}
-      {showCreate && (
-        <form onSubmit={createVenue} style={{
-          background: 'var(--bg-card)', border: '1px solid #FF6B35',
-          borderRadius: 10, padding: 16, marginBottom: 20,
-          display: 'flex', flexDirection: 'column', gap: 10,
-        }}>
-          <input className="input" placeholder={t.venueName}
-            value={newName} onChange={e => setNewName(e.target.value)} autoFocus required />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn-primary" type="submit" disabled={creating} style={{ flex: 1 }}>
-              {creating ? t.loading : t.createVenue}
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)} style={{ flex: 1, height: 52 }}>
-              {t.cancel}
-            </button>
+      {/* ── Body ── */}
+      <div style={{
+        padding: isMobile ? '24px 16px' : '40px 48px',
+        background: 'radial-gradient(ellipse at 50% 0%, rgba(255,107,53,0.05) 0%, transparent 55%), var(--bg-page)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 14 }}>
+          <div>
+            <div style={{ fontSize: isMobile ? 22 : 26, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>{t.myVenues}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3, fontWeight: 500 }}>
+              {venues.length} {venues.length === 1 ? 'venue' : 'venues'} · {activeCount} active
+            </div>
           </div>
-          {createError && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>Error: {createError}</p>}
-        </form>
-      )}
-
-      {loading && <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>{t.loading}</p>}
-
-      {!loading && venues.length === 0 && (
-        <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '3rem 0' }}>
-          <Home size={48} color="var(--border)" style={{ marginBottom: 12 }} />
-          <p>{t.noVenues}</p>
-          <button className="btn-primary" onClick={() => setShowCreate(true)}>
-            <Plus size={16} /> {t.createVenue}
+          <button
+            className="primary-btn-host"
+            onClick={() => { setShowCreate(true); setCreateError(''); }}
+            style={{
+              background: '#FF6B35', border: 'none', borderRadius: 9, padding: '11px 18px',
+              fontSize: 13, fontWeight: 800, color: '#0E0A07', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+              boxShadow: '0 0 16px rgba(255,107,53,0.35)', fontFamily: 'inherit',
+            }}
+          >
+            <Plus size={15} /> {t.createVenue}
           </button>
         </div>
-      )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {venues.map(venue => (
-          <VenueCard key={venue.id} venue={venue}
-            isMobile={isMobile}
-            onManage={() => navigate(`/host/venue/${venue.id}`)}
-            showQR={expandedQR === venue.id}
-            onToggleQR={() => setExpandedQR(expandedQR === venue.id ? null : venue.id)}
-            onStatusChange={updated => setVenues(prev => prev.map(v => v.id === updated.id ? updated : v))}
-          />
-        ))}
+        {/* ── Create form ── */}
+        {showCreate && (
+          <form onSubmit={createVenue} style={{
+            background: 'var(--bg-card)', border: '1px solid #FF6B35',
+            borderRadius: 14, padding: 18, marginBottom: 24,
+            display: 'flex', flexDirection: 'column', gap: 12,
+          }}>
+            <input className="input" placeholder={t.venueName}
+              value={newName} onChange={e => setNewName(e.target.value)} autoFocus required />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-primary" type="submit" disabled={creating} style={{ flex: 1 }}>
+                {creating ? t.loading : t.createVenue}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)} style={{ flex: 1, height: 52 }}>
+                {t.cancel}
+              </button>
+            </div>
+            {createError && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>Error: {createError}</p>}
+          </form>
+        )}
+
+        {loading && <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>{t.loading}</p>}
+
+        {!loading && venues.length === 0 && (
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '3rem 0' }}>
+            <Home size={48} color="var(--border)" style={{ marginBottom: 12 }} />
+            <p>{t.noVenues}</p>
+            <button className="btn-primary" onClick={() => setShowCreate(true)}>
+              <Plus size={16} /> {t.createVenue}
+            </button>
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18 }}>
+          {venues.map(venue => (
+            <VenueCard key={venue.id} venue={venue}
+              isMobile={isMobile}
+              queueCount={queueCounts[venue.id] ?? 0}
+              onlineCount={onlineCounts[venue.id] ?? 0}
+              onManage={() => navigate(`/host/venue/${venue.id}`)}
+              showQR={expandedQR === venue.id}
+              onToggleQR={() => setExpandedQR(expandedQR === venue.id ? null : venue.id)}
+              onStatusChange={updated => setVenues(prev => prev.map(v => v.id === updated.id ? updated : v))}
+            />
+          ))}
+        </div>
+        <VersionFooter />
       </div>
-      <VersionFooter />
     </div>
   );
 }
 
-function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobile }) {
+function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobile, queueCount, onlineCount }) {
   const { t } = useLang();
   const [toggling, setToggling] = useState(false);
 
   async function toggleStatus() {
     setToggling(true);
     const newStatus = venue.status === 'active' ? 'closed' : 'active';
-    const { data } = await supabase.from('venues').update({ status: newStatus }).eq('id', venue.id).select('id, host_id, name, room_code, status').single();
+    const { data } = await supabase.from('venues').update({ status: newStatus }).eq('id', venue.id).select('id, host_id, name, room_code, status, vibe_mode_enabled').single();
     if (data) onStatusChange(data);
     setToggling(false);
   }
 
   const isActive = venue.status === 'active';
+  const statPillStyle = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 };
 
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px' }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 22 }}>
       {/* Venue name + status badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {venue.name}
-        </h3>
-        <span style={{
-          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0,
-          background: isActive ? 'rgba(52,211,153,0.12)' : 'var(--border)',
-          color: isActive ? '#34d399' : 'var(--text-muted)',
-        }}>
-          {isActive ? t.active : t.closed}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6, letterSpacing: '-0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {venue.name}
+          </div>
+          <span style={{
+            display: 'inline-block', fontFamily: 'monospace', fontSize: 11, fontWeight: 700, letterSpacing: 1.5,
+            background: 'var(--border)', color: 'var(--text-secondary)', borderRadius: 6, padding: '4px 9px',
+          }}>
+            {venue.room_code}
+          </span>
+        </div>
+        {isActive ? (
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+            background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)',
+            borderRadius: 20, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: '#4ADE80',
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ADE80' }} />
+            {t.active}
+          </span>
+        ) : (
+          <span style={{ flexShrink: 0, background: 'var(--border)', color: 'var(--text-muted)', borderRadius: 20, padding: '6px 12px', fontSize: 12, fontWeight: 700 }}>
+            {t.closed}
+          </span>
+        )}
       </div>
 
-      {/* Room code badge */}
-      <div style={{ marginBottom: 16 }}>
-        <span style={{
-          background: 'var(--border)', color: 'var(--text-secondary)', borderRadius: 6,
-          padding: '4px 10px', fontFamily: 'monospace', letterSpacing: 2, fontSize: 12,
-        }}>
-          {venue.room_code}
-        </span>
+      {/* Live stat row */}
+      <div style={{ display: 'flex', gap: 16, margin: '14px 0 18px', flexWrap: 'wrap' }}>
+        <span style={statPillStyle}><Users size={13} /> {onlineCount} guests</span>
+        <span style={statPillStyle}><ListMusic size={13} /> {queueCount} queued</span>
+        <span style={statPillStyle}><Radio size={13} /> Vibe {venue.vibe_mode_enabled ? 'on' : 'off'}</span>
       </div>
 
       {/* Action buttons — stacked on mobile, side-by-side on desktop */}
@@ -207,15 +294,15 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobi
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-secondary" style={{ width: 52, height: 52, flexShrink: 0, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onToggleQR} title="QR Code">
-            <QrCode size={15} />
-          </button>
-          <button className="btn-secondary" style={{ flex: 1, height: 52, fontSize: 13 }} onClick={toggleStatus} disabled={toggling}>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn-secondary" style={{ flex: 1, height: 44, fontSize: 13 }} onClick={toggleStatus} disabled={toggling}>
             {isActive ? t.closeRoom : t.openRoomAction}
           </button>
-          <button className="btn-primary" style={{ flex: 1, height: 52, fontSize: 13, boxShadow: '0 0 14px rgba(255,107,53,0.35)' }} onClick={onManage}>
+          <button className="btn-primary" style={{ flex: 1, height: 44, fontSize: 13, boxShadow: '0 0 14px rgba(255,107,53,0.35)' }} onClick={onManage}>
             {t.manageVenue}
+          </button>
+          <button className="btn-secondary" style={{ width: 44, height: 44, flexShrink: 0, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onToggleQR} title="QR Code">
+            <QrCode size={15} />
           </button>
         </div>
       )}

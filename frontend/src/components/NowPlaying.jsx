@@ -4,7 +4,7 @@ import SongThumb from './SongThumb.jsx';
 
 const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
-export default function NowPlaying({ nowPlaying, vibeActive, vibeTitle, vibeChannel }) {
+export default function NowPlaying({ nowPlaying, vibeActive, vibeTitle, vibeChannel, vibeThumbnail }) {
   const { t } = useLang();
 
   if (!nowPlaying && !vibeActive) return null;
@@ -13,8 +13,7 @@ export default function NowPlaying({ nowPlaying, vibeActive, vibeTitle, vibeChan
   const title = decode(isVibe ? (nowPlaying?.title ?? vibeTitle ?? t.vibe) : nowPlaying?.item?.song_title);
   const requester = !isVibe && nowPlaying?.item?.requester_name;
   const channel = isVibe ? vibeChannel : null;
-  // Vibe tracks have no stored thumbnail (venues table only tracks title/channel) — falls back to placeholder.
-  const thumbnail = !isVibe ? nowPlaying?.item?.thumbnail_url : null;
+  const thumbnail = isVibe ? vibeThumbnail : nowPlaying?.item?.thumbnail_url;
 
   return (
     <div style={{

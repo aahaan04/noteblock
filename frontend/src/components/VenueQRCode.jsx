@@ -59,9 +59,12 @@ export default function VenueQRCode({ roomCode, size = 200 }) {
         <button className="btn-secondary" onClick={handleCopy} style={{ fontSize: 13 }}>
           {copied ? t.copiedToClipboard : t.shareLink}
         </button>
-        <button className="btn-secondary" onClick={handleDownload} style={{ fontSize: 13 }}>
+        <button className="btn-primary" onClick={handleDownload} style={{ fontSize: 13, height: 44 }}>
           {t.downloadQR}
         </button>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+        Guests can scan this to join your room
       </div>
     </div>
   );

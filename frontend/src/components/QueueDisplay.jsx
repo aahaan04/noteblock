@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Zap, X, ListMusic } from 'lucide-react';
+import { X, ListMusic } from 'lucide-react';
 import { useLang } from '../context/LangContext.jsx';
 import SongThumb from './SongThumb.jsx';
 
@@ -11,61 +11,51 @@ const QueueItem = memo(function QueueItem({ item, position, isHost, onRemove }) 
   const { t } = useLang();
   const isQuick = item.play_type === 'quick';
 
-  // Host queue tab (VenueControl) — unchanged from before.
+  // Host queue tab (VenueControl).
   if (isHost) {
     return (
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12,
+        display: 'flex', alignItems: 'center', gap: 14,
         background: 'var(--bg-card)',
-        border: `1px solid ${isQuick ? '#FF6B35' : 'var(--border)'}`,
-        borderRadius: 10,
+        border: '1px solid var(--border)',
+        borderRadius: 12,
         padding: '12px 14px',
-        boxShadow: isQuick ? '0 0 10px rgba(255,107,53,0.12)' : 'none',
       }}>
-        <span style={{ color: 'var(--text-muted)', fontFamily: 'monospace', minWidth: 20, fontSize: 13 }}>
+        <span style={{ color: 'var(--text-muted)', fontWeight: 800, minWidth: 20, textAlign: 'center', fontSize: 14 }}>
           {position}
         </span>
-        {item.thumbnail_url && (
-          <img
-            src={item.thumbnail_url}
-            alt=""
-            loading="lazy"
-            style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
-          />
-        )}
+        <SongThumb src={item.thumbnail_url} size={46} radius={8} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-primary)' }}>
             {decode(item.song_title)}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, marginTop: 2 }}>
             {t.requestedBy} {decode(item.requester_name) ?? 'Guest'}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {isQuick ? (
-            <span style={{
-              background: '#FF6B35', color: 'var(--bg-app)',
-              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
-              display: 'flex', alignItems: 'center', gap: 3,
-            }}>
-              <Zap size={10} /> QUICK
-            </span>
-          ) : (
-            <span style={{
-              background: 'var(--btn-normal)', color: 'var(--credits)',
-              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
-            }}>
-              NORMAL
-            </span>
-          )}
-          <button
-            onClick={() => onRemove(item.id)}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
-            title={t.removeFromQueue}
-          >
-            <X size={16} />
-          </button>
-        </div>
+        {isQuick ? (
+          <span style={{
+            background: '#FF6B35', color: '#0E0A07',
+            fontSize: 10, fontWeight: 800, padding: '4px 9px', borderRadius: 6,
+            boxShadow: '0 0 8px rgba(255,107,53,0.3)', flexShrink: 0,
+          }}>
+            Quick
+          </span>
+        ) : (
+          <span style={{
+            background: 'var(--border)', color: 'var(--credits)', border: '1px solid #3D2B1A',
+            fontSize: 10, fontWeight: 800, padding: '4px 9px', borderRadius: 6, flexShrink: 0,
+          }}>
+            Normal
+          </span>
+        )}
+        <button
+          onClick={() => onRemove(item.id)}
+          style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'var(--border)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+          title={t.removeFromQueue}
+        >
+          <X size={14} />
+        </button>
       </div>
     );
   }
@@ -108,9 +98,9 @@ export default memo(function QueueDisplay({ items, isHost, onRemove }) {
 
   if (!pending.length) {
     return (
-      <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-        <ListMusic size={48} color="var(--border)" style={{ marginBottom: 12 }} />
-        <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t.emptyQueue}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: isHost ? '90px 20px' : '2rem 0', textAlign: 'center' }}>
+        <ListMusic size={48} color="var(--border)" style={{ marginBottom: 16 }} />
+        <div style={{ color: 'var(--text-muted)', fontSize: 14, fontWeight: 600 }}>{t.emptyQueue}</div>
       </div>
     );
   }

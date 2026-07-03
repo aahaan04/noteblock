@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Disc3, Play, Radio, Pause, Music } from 'lucide-react';
 import { useLang } from '../context/LangContext.jsx';
 
@@ -6,8 +7,18 @@ const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&q
 // Full-screen "quick access to now playing" view, reached via the raised
 // center button in the bottom nav. Shows a spinning vinyl-record visual with
 // the current song's thumbnail as the record label; spins only while playing.
-export default function NowPlayingHome({ venue, nowPlaying, vibeActive, vibeTitle, vibeChannel }) {
+export default function NowPlayingHome({ venue, nowPlaying, vibeActive, vibeTitle, vibeChannel, vibeThumbnail }) {
   const { t } = useLang();
+  const [thumbBroken, setThumbBroken] = useState(false);
+
+  const isVibe = vibeActive || nowPlaying?.type === 'vibe';
+  const isPlaying = !!(nowPlaying || vibeActive);
+  const title = isPlaying ? decode(isVibe ? (nowPlaying?.title ?? vibeTitle ?? t.vibe) : nowPlaying?.item?.song_title) : null;
+  const requester = isPlaying && !isVibe && nowPlaying?.item?.requester_name;
+  const channel = isPlaying && isVibe ? vibeChannel : null;
+  const thumbnail = isPlaying ? (isVibe ? vibeThumbnail : nowPlaying?.item?.thumbnail_url) : null;
+
+  useEffect(() => { setThumbBroken(false); }, [thumbnail]);
 
   if (venue?.jukebox_paused) {
     return (
@@ -25,13 +36,6 @@ export default function NowPlayingHome({ venue, nowPlaying, vibeActive, vibeTitl
     );
   }
 
-  const isVibe = vibeActive || nowPlaying?.type === 'vibe';
-  const isPlaying = !!(nowPlaying || vibeActive);
-  const title = isPlaying ? decode(isVibe ? (nowPlaying?.title ?? vibeTitle ?? t.vibe) : nowPlaying?.item?.song_title) : null;
-  const requester = isPlaying && !isVibe && nowPlaying?.item?.requester_name;
-  const channel = isPlaying && isVibe ? vibeChannel : null;
-  const thumbnail = isPlaying && !isVibe ? nowPlaying?.item?.thumbnail_url : null;
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px 24px', textAlign: 'center', minHeight: 380 }}>
       <div style={{
@@ -48,8 +52,8 @@ export default function NowPlayingHome({ venue, nowPlaying, vibeActive, vibeTitl
           border: '4px solid var(--bg-app)', background: 'var(--bg-app)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
-          {thumbnail ? (
-            <img src={thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {thumbnail && !thumbBroken ? (
+            <img src={thumbnail} alt="" onError={() => setThumbBroken(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
             <Music size={28} color={isPlaying ? '#FF6B35' : 'var(--text-muted)'} />
           )}

@@ -615,7 +615,7 @@ export default function GuestRoom() {
               </div>
             )
           ) : (
-            <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} />
+            <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} vibeThumbnail={venue.vibe_now_playing_thumbnail} />
           )}
         </div>
       )}
@@ -681,7 +681,7 @@ export default function GuestRoom() {
         )}
 
         {tab === 'home' && (
-          <NowPlayingHome venue={venue} nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} />
+          <NowPlayingHome venue={venue} nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} vibeThumbnail={venue.vibe_now_playing_thumbnail} />
         )}
       </div>
 
