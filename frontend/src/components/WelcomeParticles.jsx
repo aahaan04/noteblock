@@ -5,31 +5,79 @@ const NOTE_COLORS = ['#FF6B35', '#C89B6E'];
 const PIXEL_COLORS = ['#8B5A2B', '#6B4226', '#FF6B35', '#C89B6E'];
 const MAX_PARTICLES = 18; // hard cap so the DOM node count never grows unbounded
 
-// Simple single quarter-note glyph — a filled notehead + straight stem, no
-// beam/flag. The earlier two-note "beamed eighth notes" glyph looked fine at
-// button/nav size but its connecting bar and second notehead blur into a
-// shapeless blob once rendered at particle size (10-18px) and rotated
-// mid-flight. A plain circle + rectangle stays crisp and readable at any
-// size, including with mild rotation applied.
-function buildNoteSvg(mirrored, size) {
+// All three glyphs below are built purely from circles + rectangles (no thin
+// diagonal paths or curves) since that's what stayed crisp and readable at
+// particle size (10-18px) with rotation applied — the earlier "beamed
+// eighth notes" glyph used a connecting path that blurred into a blob at
+// this scale, which is why it was replaced with the plain quarter note.
+// These three keep that same constraint while giving some visual variety.
+
+function svgBase(size) {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('fill', 'currentColor');
-
-  const notehead = document.createElementNS(SVG_NS, 'circle');
-  const stem = document.createElementNS(SVG_NS, 'rect');
-  if (mirrored) {
-    notehead.setAttribute('cx', '16'); notehead.setAttribute('cy', '18'); notehead.setAttribute('r', '4.5');
-    stem.setAttribute('x', '18.3'); stem.setAttribute('y', '3'); stem.setAttribute('width', '2.4'); stem.setAttribute('height', '15.5');
-  } else {
-    notehead.setAttribute('cx', '8'); notehead.setAttribute('cy', '18'); notehead.setAttribute('r', '4.5');
-    stem.setAttribute('x', '10.3'); stem.setAttribute('y', '3'); stem.setAttribute('width', '2.4'); stem.setAttribute('height', '15.5');
-  }
-  svg.appendChild(notehead);
-  svg.appendChild(stem);
   return svg;
+}
+function circle(cx, cy, r) {
+  const c = document.createElementNS(SVG_NS, 'circle');
+  c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', r);
+  return c;
+}
+function rect(x, y, w, h) {
+  const r = document.createElementNS(SVG_NS, 'rect');
+  r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', w); r.setAttribute('height', h);
+  return r;
+}
+function triangle(x1, y1, x2, y2, x3, y3) {
+  const p = document.createElementNS(SVG_NS, 'polygon');
+  p.setAttribute('points', `${x1},${y1} ${x2},${y2} ${x3},${y3}`);
+  return p;
+}
+
+// Quarter note ♩ — notehead + stem.
+function buildQuarterNote(mirrored, size) {
+  const svg = svgBase(size);
+  const nx = mirrored ? 16 : 8;
+  const sx = mirrored ? 18.3 : 10.3;
+  svg.appendChild(circle(nx, 18, 4.5));
+  svg.appendChild(rect(sx, 3, 2.4, 15.5));
+  return svg;
+}
+
+// Eighth note ♪ — notehead + stem + a small filled flag.
+function buildEighthNote(mirrored, size) {
+  const svg = svgBase(size);
+  const nx = mirrored ? 16 : 8;
+  const sx = mirrored ? 18.3 : 10.3;
+  const dir = mirrored ? -1 : 1;
+  svg.appendChild(circle(nx, 18, 4.2));
+  svg.appendChild(rect(sx, 3, 2.2, 15.5));
+  svg.appendChild(triangle(sx + 2.2, 3, sx + 2.2 + dir * 6.5, 6.5, sx + 2.2, 10));
+  return svg;
+}
+
+// Beamed pair ♫ — two noteheads joined by a straight beam bar (no diagonal path).
+function buildBeamedPair(size) {
+  const svg = svgBase(size);
+  svg.appendChild(circle(5.5, 19, 3.6));
+  svg.appendChild(circle(15.5, 19, 3.6));
+  svg.appendChild(rect(7.6, 4, 2.1, 15));
+  svg.appendChild(rect(17.6, 4, 2.1, 15));
+  svg.appendChild(rect(7.6, 4, 12.1, 2.6));
+  return svg;
+}
+
+const NOTE_BUILDERS = [
+  size => buildQuarterNote(Math.random() > 0.5, size),
+  size => buildEighthNote(Math.random() > 0.5, size),
+  size => buildBeamedPair(size),
+];
+
+function buildRandomNote(size) {
+  const builder = NOTE_BUILDERS[Math.floor(Math.random() * NOTE_BUILDERS.length)];
+  return builder(size);
 }
 
 // Ambient particle layer for the welcome screen. Spawns two layers of rising
@@ -57,8 +105,7 @@ export default function WelcomeParticles() {
       if (countRef.current >= MAX_PARTICLES) return;
       const el = document.createElement('div');
       el.className = 'wp-note';
-      const alt = Math.random() > 0.5;
-      el.appendChild(buildNoteSvg(alt, alt ? 14 : 18));
+      el.appendChild(buildRandomNote(Math.random() > 0.5 ? 14 : 18));
 
       const xOffset = (Math.random() - 0.5) * 90;
       const drift = (Math.random() - 0.5) * 50;
@@ -77,12 +124,11 @@ export default function WelcomeParticles() {
       if (countRef.current >= MAX_PARTICLES) return;
       const el = document.createElement('div');
       el.className = 'wp-pixel';
-      const alt = Math.random() > 0.5;
       // Kept at a size where the notehead/stem are still legible — going
       // much smaller (or shrinking via a CSS scale transform) just reads as
       // an indistinct blob, i.e. right back to looking like a plain pixel.
       const size = 10 + Math.random() * 4;
-      el.appendChild(buildNoteSvg(alt, size));
+      el.appendChild(buildRandomNote(size));
       const xOffset = (Math.random() - 0.5) * 80;
       const drift = (Math.random() - 0.5) * 40;
       const duration = 2 + Math.random() * 1.5;
