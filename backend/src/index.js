@@ -12,6 +12,7 @@ import queueRouter from './routes/queue.js';
 import youtubeRouter from './routes/youtube.js';
 import usersRouter from './routes/users.js';
 import creditsRouter from './routes/credits.js';
+import { startVibeAggregationSchedule } from './jobs/vibeAggregation.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -103,4 +104,7 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`🎵 Noteblock running on http://localhost:${PORT}`);
+  // Background-only: recomputes venue_vibe_data every 15 min for venues with
+  // new activity. Never runs synchronously in the request path.
+  startVibeAggregationSchedule();
 });

@@ -477,6 +477,7 @@ export default function GuestRoom() {
       const result = await api.queue.add(venue.id, {
         youtube_video_id: song.videoId, song_title: song.title,
         thumbnail_url: song.thumbnail, play_type: playType, requester_name: requesterName,
+        channel: song.channel,
       }, token);
       const newBalance = credits - result.credits_charged;
       prevCreditsRef.current = newBalance;

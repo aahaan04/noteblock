@@ -4,12 +4,53 @@ import {
   ArrowLeft, Music, Play, Pause, SkipForward, ListMusic, Radio,
   Ban, Users, BarChart2, QrCode, RefreshCw, MoreHorizontal,
   Gift, Check, X, ChevronUp, ChevronDown, Save, AlertTriangle, Settings2,
-  Download, ShieldOff,
+  Download, ShieldOff, Upload, FileJson, Lock,
 } from 'lucide-react';
 
 const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
 const HOST_FONT = "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+// Builds a vibeVideos-shaped pool ({videoId, title, channel, thumbnail}) from
+// a venue_vibe_data-shaped object (either the venue's own auto-generated data,
+// or an uploaded file — both have the same top_songs_* shape). Weights the
+// last-30-days list more heavily than all-time, per spec. This only changes
+// which pool CrossfadePlayer draws from — the crossfade/no-repeat/exhaustion
+// logic in CrossfadePlayer itself is untouched, it just treats this like any
+// other vibeVideos array.
+const VIBE_RECENT_WEIGHT = 3;
+const VIBE_ALLTIME_WEIGHT = 1;
+const VIBE_POOL_MAX = 40;
+
+function buildVibeVideosFromTopSongs(vibeData) {
+  if (!vibeData) return [];
+  const recent = vibeData.top_songs_last_30_days ?? [];
+  const alltime = vibeData.top_songs_alltime ?? [];
+  const scored = new Map(); // video_id -> { videoId, title, channel, thumbnail, score }
+
+  for (const s of recent) {
+    if (!s?.video_id) continue;
+    scored.set(s.video_id, {
+      videoId: s.video_id, title: s.title ?? 'Vibe Track', channel: s.artist ?? null, thumbnail: s.thumbnail ?? null,
+      score: (s.request_count ?? 1) * VIBE_RECENT_WEIGHT,
+    });
+  }
+  for (const s of alltime) {
+    if (!s?.video_id) continue;
+    const addScore = (s.request_count ?? 1) * VIBE_ALLTIME_WEIGHT;
+    const existing = scored.get(s.video_id);
+    if (existing) existing.score += addScore;
+    else scored.set(s.video_id, {
+      videoId: s.video_id, title: s.title ?? 'Vibe Track', channel: s.artist ?? null, thumbnail: s.thumbnail ?? null,
+      score: addScore,
+    });
+  }
+
+  return [...scored.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, VIBE_POOL_MAX)
+    .map(({ videoId, title, channel, thumbnail }) => ({ videoId, title, channel, thumbnail }));
+}
 
 // Bumped from 768 to 1024 so the two-column desktop layout only applies on
 // genuinely wide viewports — tablets now get the (already mobile-tuned)
@@ -178,6 +219,18 @@ export default function VenueControl() {
   async function refetchVenue() {
     try { const v = await api.venues.get(id, tokenRef.current); setVenue(v); } catch {}
   }
+  // Re-fetch AND reload the vibe pool from the fresh data — used specifically
+  // after an upload/remove-vibe-file action, so a new file takes effect
+  // immediately if "Uploaded File" is the active source. Deliberately
+  // separate from refetchVenue (used by the realtime subscription on every
+  // venue change) so this heavier reload never runs on unrelated updates.
+  async function refetchVenueAndVibe() {
+    try {
+      const v = await api.venues.get(id, tokenRef.current);
+      setVenue(v);
+      if (v.vibe_mode_enabled) loadVibeVideos(v);
+    } catch {}
+  }
   async function loadQueue() {
     try { const q = await api.queue.list(id); setQueue(q); } catch {}
   }
@@ -191,13 +244,27 @@ export default function VenueControl() {
     if (!v) return;
     try {
       let videos = [];
-      if (v.vibe_playlist_urls?.length) {
-        for (const url of v.vibe_playlist_urls) {
-          const playlistId = new URL(url).searchParams.get('list');
-          if (playlistId) videos = [...videos, ...(await api.youtube.playlist(playlistId))];
+      const source = v.vibe_source ?? 'description';
+
+      if (source === 'playlist') {
+        if (v.vibe_playlist_urls?.length) {
+          for (const url of v.vibe_playlist_urls) {
+            const playlistId = new URL(url).searchParams.get('list');
+            if (playlistId) videos = [...videos, ...(await api.youtube.playlist(playlistId))];
+          }
         }
+      } else if (source === 'description') {
+        if (v.vibe_description) videos = await api.youtube.vibe(v.vibe_description);
+      } else if (source === 'upload') {
+        // Uploaded file's top_songs data — never the venue's own collected data.
+        videos = buildVibeVideosFromTopSongs(v.uploaded_vibe_data);
+      } else if (source === 'auto') {
+        // The venue's own auto-generated stats (fetched fresh — this is a
+        // background/manual-triggered read, never on the request_song path).
+        const data = await api.venues.vibeData(id, tokenRef.current).catch(() => null);
+        videos = buildVibeVideosFromTopSongs(data);
       }
-      if (!videos.length && v.vibe_description) videos = await api.youtube.vibe(v.vibe_description);
+
       setVibeVideos(videos);
     } catch {}
   }
@@ -245,7 +312,7 @@ export default function VenueControl() {
     try {
       const updated = await api.venues.update(id, updates, token);
       setVenue(updated);
-      if (updates.vibe_mode_enabled !== undefined || updates.vibe_description !== undefined || updates.vibe_playlist_urls !== undefined) loadVibeVideos(updated);
+      if (updates.vibe_mode_enabled !== undefined || updates.vibe_description !== undefined || updates.vibe_playlist_urls !== undefined || updates.vibe_source !== undefined) loadVibeVideos(updated);
     } catch {}
   }
 
@@ -396,7 +463,7 @@ export default function VenueControl() {
           <QueueDisplay items={queue} isHost onRemove={handleRemove} />
         </>
       )}
-      {tab === 'vibe'   && <VibeSettings venue={venue} onUpdate={handleVenueUpdate} vibePlayedCount={vibePlayedIds.length} onResetVibeHistory={() => { setVibePlayedIds([]); handleVenueUpdate({ vibe_played_video_ids: [] }); }} />}
+      {tab === 'vibe'   && <VibeSettings venue={venue} venueId={id} token={token} onUpdate={handleVenueUpdate} onVenueRefresh={refetchVenueAndVibe} vibePlayedCount={vibePlayedIds.length} onResetVibeHistory={() => { setVibePlayedIds([]); handleVenueUpdate({ vibe_played_video_ids: [] }); }} />}
       {tab === 'ban'    && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />}
       {tab === 'users'  && <UsersPanel venueId={id} token={token} />}
       {tab === 'stats'  && <StatsPanel stats={stats} />}
@@ -647,7 +714,14 @@ function SettingsBlock({ label, children }) {
 
 // ── Vibe settings ─────────────────────────────────────────────────────────────
 
-function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory }) {
+const VIBE_SOURCE_OPTIONS = [
+  { key: 'description', label: 'Manual Description' },
+  { key: 'playlist', label: 'Playlist URLs' },
+  { key: 'upload', label: 'Uploaded File' },
+  { key: 'auto', label: 'Auto-Vibe' },
+];
+
+function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePlayedCount = 0, onResetVibeHistory }) {
   const { t } = useLang();
   const [desc, setDesc] = useState(venue.vibe_description ?? '');
   const [urls, setUrls] = useState((venue.vibe_playlist_urls ?? []).join('\n'));
@@ -657,8 +731,82 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
   const [queueWhenPaused, setQueueWhenPaused] = useState(venue.queue_open_when_paused ?? false);
   const [saving, setSaving] = useState(false);
 
+  // Vibe source selector — which of the 4 sources is active for playback.
+  const [source, setSource] = useState(venue.vibe_source ?? 'description');
+  const [vibeData, setVibeData] = useState(null); // this venue's own venue_vibe_data row
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [downloading, setDownloading] = useState(false);
+
   // Pending confirmation for queue-when-paused toggle
   const [pendingToggle, setPendingToggle] = useState(null); // null | { newVal: bool }
+
+  useEffect(() => {
+    let cancelled = false;
+    api.venues.vibeData(venueId, token)
+      .then(data => { if (!cancelled) setVibeData(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [venueId, token]);
+
+  const requestsSoFar = vibeData?.total_requests_alltime ?? 0;
+  const vibeReady = vibeData?.vibe_ready ?? false;
+
+  async function handleSourceChange(key) {
+    if (key === 'auto' && !vibeReady) return; // locked — button is disabled too, this is just a safety net
+    setSource(key);
+    await onUpdate({ vibe_source: key });
+  }
+
+  async function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same filename later
+    if (!file) return;
+    setUploadError('');
+    setUploading(true);
+    try {
+      const text = await file.text();
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        setUploadError('Invalid JSON format — could not parse this file.');
+        return;
+      }
+      await api.venues.uploadVibeFile(venueId, { filename: file.name, data: parsed }, token);
+      onVenueRefresh?.();
+    } catch (err) {
+      setUploadError(err.data?.error ?? 'Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleRemoveVibeFile() {
+    setUploading(true);
+    try {
+      await api.venues.removeVibeFile(venueId, token);
+      onVenueRefresh?.();
+    } catch {} finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDownloadVibeFile() {
+    setDownloading(true);
+    try {
+      const data = vibeData ?? await api.venues.vibeData(venueId, token);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `noteblock-vibe-${venue.room_code}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {} finally {
+      setDownloading(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -729,12 +877,118 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
           label={t.enableVibe}
           description="Auto-play background music from a playlist or description when the queue is empty."
         />
-        <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginTop: 16, marginBottom: 2 }}>{t.vibeDescription}</label>
-        <input className="input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. upbeat party hits, 2000s pop, lofi chill"
-          style={{ marginTop: 10, background: 'var(--bg-page)', fontSize: 13, fontWeight: 600 }} />
-        <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginTop: 16, marginBottom: 2 }}>{t.vibePlaylistUrls}</label>
-        <textarea className="input" value={urls} onChange={e => setUrls(e.target.value)} rows={3}
-          placeholder="https://youtube.com/playlist?list=..." style={{ marginTop: 10, background: 'var(--bg-page)', fontSize: 13, fontWeight: 600, resize: 'vertical' }} />
+
+        {/* Source selector — only one of the 4 sources is active at a time.
+            Data collection (venue_vibe_data) keeps running in the background
+            regardless of which source is selected here. */}
+        <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginTop: 18, marginBottom: 8 }}>
+          Vibe Source
+        </label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {VIBE_SOURCE_OPTIONS.map(opt => {
+            const locked = opt.key === 'auto' && !vibeReady;
+            const active = source === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                disabled={locked}
+                onClick={() => handleSourceChange(opt.key)}
+                title={locked ? `Waiting for more requested songs. Unlocks at 50 requests. Currently at ${requestsSoFar}/50.` : undefined}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  minHeight: 42, padding: '8px', borderRadius: 9, fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                  textAlign: 'center', lineHeight: 1.25,
+                  cursor: locked ? 'not-allowed' : 'pointer',
+                  background: active ? '#FF6B35' : 'var(--bg-page)',
+                  color: active ? '#0E0A07' : locked ? 'var(--text-muted)' : 'var(--text-primary)',
+                  border: `1px solid ${active ? '#FF6B35' : 'var(--border)'}`,
+                  opacity: locked ? 0.55 : 1,
+                }}
+              >
+                {locked && <Lock size={11} />}
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Manual Description (existing, unchanged) ── */}
+        {source === 'description' && (
+          <>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginTop: 16, marginBottom: 2 }}>{t.vibeDescription}</label>
+            <input className="input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. upbeat party hits, 2000s pop, lofi chill"
+              style={{ marginTop: 10, background: 'var(--bg-page)', fontSize: 13, fontWeight: 600 }} />
+          </>
+        )}
+
+        {/* ── Playlist URLs (existing, unchanged) ── */}
+        {source === 'playlist' && (
+          <>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginTop: 16, marginBottom: 2 }}>{t.vibePlaylistUrls}</label>
+            <textarea className="input" value={urls} onChange={e => setUrls(e.target.value)} rows={3}
+              placeholder="https://youtube.com/playlist?list=..." style={{ marginTop: 10, background: 'var(--bg-page)', fontSize: 13, fontWeight: 600, resize: 'vertical' }} />
+          </>
+        )}
+
+        {/* ── Uploaded File (new) ── */}
+        {source === 'upload' && (
+          <div style={{ marginTop: 16 }}>
+            {venue.uploaded_vibe_filename ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 9, padding: '10px 12px' }}>
+                <FileJson size={16} color="var(--credits)" style={{ flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {venue.uploaded_vibe_filename}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                    Uploaded {venue.uploaded_vibe_uploaded_at ? new Date(venue.uploaded_vibe_uploaded_at).toLocaleDateString() : '—'}
+                  </div>
+                </div>
+                <button
+                  onClick={handleRemoveVibeFile}
+                  disabled={uploading}
+                  style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 7, color: '#f87171', cursor: 'pointer', fontSize: 12, fontWeight: 700, padding: '6px 10px', fontFamily: 'inherit', flexShrink: 0 }}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <label style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                border: '1px dashed var(--border)', borderRadius: 9, padding: 16,
+                cursor: uploading ? 'default' : 'pointer', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
+              }}>
+                <Upload size={16} />
+                {uploading ? 'Uploading…' : 'Choose a .json vibe file'}
+                <input type="file" accept=".json,application/json" onChange={handleFileChange} disabled={uploading} style={{ display: 'none' }} />
+              </label>
+            )}
+            {uploadError && <p style={{ color: '#f87171', fontSize: 12, marginTop: 8 }}>{uploadError}</p>}
+          </div>
+        )}
+
+        {/* ── Auto-Vibe (new) ── */}
+        {source === 'auto' && (
+          <div style={{ marginTop: 16 }}>
+            {vibeReady ? (
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                Using this venue's own request history — {requestsSoFar} requests so far
+                {vibeData?.top_songs_alltime?.[0]?.title && (
+                  <>, top track: <strong style={{ color: 'var(--text-primary)' }}>{decode(vibeData.top_songs_alltime[0].title)}</strong></>
+                )}.
+              </div>
+            ) : (
+              <div style={{ background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.3)', borderRadius: 9, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Lock size={16} color="var(--credits)" style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: 'var(--credits)', lineHeight: 1.4 }}>
+                  Waiting for more requested songs. Unlocks at 50 requests. Currently at {requestsSoFar}/50.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {vibePlayedCount > 0 && (
           <button
             onClick={onResetVibeHistory}
@@ -751,6 +1005,28 @@ function VibeSettings({ venue, onUpdate, vibePlayedCount = 0, onResetVibeHistory
             <RefreshCw size={14} /> {t.resetVibeHistory} ({vibePlayedCount})
           </button>
         )}
+
+        {/* ── Download Vibe File — always visible regardless of active source ── */}
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 10 }}>
+            {requestsSoFar} / 50 songs requested
+          </div>
+          <button
+            type="button"
+            onClick={handleDownloadVibeFile}
+            disabled={!vibeReady || downloading}
+            title={!vibeReady ? `Waiting for more requested songs. Your Vibe File unlocks once your venue has received 50 song requests. Currently at ${requestsSoFar}/50.` : undefined}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 9, border: 'none',
+              background: vibeReady ? '#FF6B35' : 'var(--border)',
+              color: vibeReady ? '#0E0A07' : 'var(--text-muted)',
+              cursor: vibeReady && !downloading ? 'pointer' : 'not-allowed',
+              fontWeight: 800, fontSize: 13, fontFamily: 'inherit',
+            }}
+          >
+            <Download size={15} /> {downloading ? 'Preparing…' : 'Download Vibe File'}
+          </button>
+        </div>
       </SettingsBlock>
 
       {/* ── Playback & credits ── */}

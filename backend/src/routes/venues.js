@@ -80,6 +80,7 @@ router.put('/:id', requireAuth, body(schemas.updateVenue), async (req, res) => {
     'vibe_current_video_index', 'vibe_current_position_seconds',
     'jukebox_paused', 'queue_open_when_paused', 'vibe_played_video_ids',
     'vibe_now_playing_title', 'vibe_now_playing_channel', 'vibe_now_playing_thumbnail',
+    'vibe_source',
   ];
   const updates = {};
   for (const key of allowed) {
@@ -326,6 +327,110 @@ router.get('/:id/stats', requireAuth, async (req, res) => {
     .slice(0, 5);
 
   res.json({ totalRequests, totalCredits, topSongs });
+});
+
+// ── Venue Vibe File system ──────────────────────────────────────────────────
+// All routes below are host-only. venue_vibe_data is populated entirely by
+// the background aggregation job (backend/src/jobs/vibeAggregation.js), never
+// computed synchronously here — these routes only read/write it.
+
+// GET /api/venues/:id/vibe-data — the venue's own auto-generated vibe stats
+// (used for the Vibe tab's progress line, locked/unlocked Auto-Vibe state,
+// and to build the downloadable vibe file).
+router.get('/:id/vibe-data', requireAuth, async (req, res) => {
+  const { data: venue } = await supabaseAdmin
+    .from('venues').select('id, room_code').eq('id', req.params.id).eq('host_id', req.user.id).single();
+  if (!venue) return res.status(403).json({ error: 'Forbidden' });
+
+  const { data, error } = await supabaseAdmin
+    .from('venue_vibe_data')
+    .select('*')
+    .eq('venue_id', req.params.id)
+    .maybeSingle();
+
+  if (error) return dbErr('vibe-data/get', error, res);
+  // No row yet just means the venue hasn't had its first aggregation run —
+  // report zeroed-out, not-ready stats rather than a 404.
+  res.json(data ?? {
+    venue_id: req.params.id, generated_at: null,
+    total_requests_alltime: 0, total_unique_songs_alltime: 0, vibe_ready: false,
+    top_songs_alltime: [], top_songs_last_30_days: [], genre_breakdown: {},
+    peak_request_hours: {}, peak_request_days: {},
+    quick_play_vs_normal_ratio: { quick_play_count: 0, normal_play_count: 0, quick_play_percentage: 0 },
+    average_session_request_count: 0, vibe_confidence_score: 0, schema_version: '1.0',
+  });
+});
+
+const VIBE_FILE_REQUIRED_FIELDS = ['schema_version', 'top_songs_alltime', 'top_songs_last_30_days'];
+const VIBE_FILE_SUPPORTED_VERSIONS = ['1.0'];
+
+// Deliberately hand-written rather than a generic zod schema so each failure
+// mode gets the specific, human-readable message the host actually needs to
+// act on (which field is missing, what version was expected, etc).
+function validateVibeFile(payload) {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return 'Invalid JSON format — expected a vibe file object.';
+  }
+  for (const field of VIBE_FILE_REQUIRED_FIELDS) {
+    if (!(field in payload)) return `This file is missing required field '${field}'.`;
+  }
+  if (!VIBE_FILE_SUPPORTED_VERSIONS.includes(payload.schema_version)) {
+    return `Unsupported schema version — expected ${VIBE_FILE_SUPPORTED_VERSIONS.join(' or ')}, got '${payload.schema_version}'.`;
+  }
+  if (!Array.isArray(payload.top_songs_alltime) || !Array.isArray(payload.top_songs_last_30_days)) {
+    return `'top_songs_alltime' and 'top_songs_last_30_days' must be arrays.`;
+  }
+  for (const arr of [payload.top_songs_alltime, payload.top_songs_last_30_days]) {
+    for (const entry of arr) {
+      if (!entry || typeof entry !== 'object' || typeof entry.video_id !== 'string') {
+        return `Each song entry must include a 'video_id' string.`;
+      }
+    }
+  }
+  return null;
+}
+
+// POST /api/venues/:id/vibe-file/upload — upload + validate a vibe file from
+// another venue (or a previously downloaded one). Stored entirely separately
+// from the venue's own venue_vibe_data row — this never overwrites or affects
+// the venue's own collected data.
+router.post('/:id/vibe-file/upload', requireAuth, async (req, res) => {
+  const { data: venue } = await supabaseAdmin
+    .from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
+  if (!venue) return res.status(403).json({ error: 'Forbidden' });
+
+  const { filename, data: fileData } = req.body ?? {};
+  const validationError = validateVibeFile(fileData);
+  if (validationError) return res.status(400).json({ error: validationError });
+
+  const { data, error } = await supabaseAdmin
+    .from('venues')
+    .update({
+      uploaded_vibe_data: fileData,
+      uploaded_vibe_filename: typeof filename === 'string' ? filename.slice(0, 200) : 'vibe-file.json',
+      uploaded_vibe_uploaded_at: new Date().toISOString(),
+    })
+    .eq('id', req.params.id)
+    .select('id, uploaded_vibe_filename, uploaded_vibe_uploaded_at')
+    .single();
+
+  if (error) return dbErr('vibe-file/upload', error, res);
+  res.json({ success: true, ...data });
+});
+
+// DELETE /api/venues/:id/vibe-file — remove the uploaded vibe file
+router.delete('/:id/vibe-file', requireAuth, async (req, res) => {
+  const { data: venue } = await supabaseAdmin
+    .from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
+  if (!venue) return res.status(403).json({ error: 'Forbidden' });
+
+  const { error } = await supabaseAdmin
+    .from('venues')
+    .update({ uploaded_vibe_data: null, uploaded_vibe_filename: null, uploaded_vibe_uploaded_at: null })
+    .eq('id', req.params.id);
+
+  if (error) return dbErr('vibe-file/remove', error, res);
+  res.json({ success: true });
 });
 
 export default router;

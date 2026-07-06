@@ -35,6 +35,9 @@ export const api = {
     removeUser: (venueId, name, t) => del(`/api/venues/${venueId}/users/${encodeURIComponent(name)}`, t),
     banUser: (venueId, body, t) => post(`/api/venues/${venueId}/banned-users`, body, t),
     unbanUser: (venueId, bannedUserId, t) => del(`/api/venues/${venueId}/banned-users/${bannedUserId}`, t),
+    vibeData: (venueId, t) => get(`/api/venues/${venueId}/vibe-data`, t),
+    uploadVibeFile: (venueId, body, t) => post(`/api/venues/${venueId}/vibe-file/upload`, body, t),
+    removeVibeFile: (venueId, t) => del(`/api/venues/${venueId}/vibe-file`, t),
   },
 
   queue: {

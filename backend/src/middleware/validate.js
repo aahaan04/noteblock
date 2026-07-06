@@ -46,6 +46,7 @@ export const schemas = {
     vibe_now_playing_title: z.string().trim().max(300).nullable().optional(),
     vibe_now_playing_channel: z.string().trim().max(200).nullable().optional(),
     vibe_now_playing_thumbnail: optUrl,
+    vibe_source: z.enum(['description', 'playlist', 'upload', 'auto']).optional(),
   }).strict(),
 
   // POST /api/venues/:id/banned (songs)
@@ -74,6 +75,7 @@ export const schemas = {
     thumbnail_url: optUrl,
     play_type: z.enum(['normal', 'quick']),
     requester_name: safeName(80).optional(),
+    channel: z.string().trim().max(200).nullable().optional(),
   }),
 
   // PATCH /api/venues/:venueId/queue/:itemId

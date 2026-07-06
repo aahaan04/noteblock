@@ -50,6 +50,7 @@ router.post('/', requireAuth, queueLimiter, body(schemas.addQueue), async (req, 
     thumbnail_url,
     play_type = 'normal',
     requester_name = 'Guest',
+    channel,
   } = req.body;
 
   // Check venue is active and not paused
@@ -104,6 +105,7 @@ router.post('/', requireAuth, queueLimiter, body(schemas.addQueue), async (req, 
     p_requester_name: requester_name,
     p_play_type: play_type,
     p_credits_to_charge: credits_to_charge,
+    p_channel: channel ?? null,
   });
 
   if (error) {
