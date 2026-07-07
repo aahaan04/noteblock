@@ -55,11 +55,11 @@ router.post('/', requireAuth, queueLimiter, body(schemas.addQueue), async (req, 
 
   // Check venue is active and not paused
   const { data: venueCheck } = await supabaseAdmin
-    .from('venues').select('status, jukebox_paused, queue_open_when_paused').eq('id', req.params.venueId).single();
+    .from('venues').select('status, jukebox_paused').eq('id', req.params.venueId).single();
   if (!venueCheck || venueCheck.status !== 'active') {
     return res.status(400).json({ error: 'venue_closed' });
   }
-  if (venueCheck.jukebox_paused && !venueCheck.queue_open_when_paused) {
+  if (venueCheck.jukebox_paused) {
     return res.status(400).json({ error: 'jukebox_paused' });
   }
 

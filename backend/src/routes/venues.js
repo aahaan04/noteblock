@@ -30,7 +30,7 @@ router.get('/room/:roomCode', async (req, res) => {
 
   const { data, error } = await supabaseAdmin
     .from('venues')
-    .select('id, name, room_code, status, welcome_credits, vibe_mode_enabled, jukebox_paused, queue_open_when_paused, vibe_description, vibe_now_playing_title, vibe_now_playing_channel, vibe_now_playing_thumbnail')
+    .select('id, name, room_code, status, welcome_credits, vibe_mode_enabled, jukebox_paused, vibe_description, vibe_now_playing_title, vibe_now_playing_channel, vibe_now_playing_thumbnail')
     .eq('room_code', code)
     .single();
 
@@ -78,7 +78,7 @@ router.put('/:id', requireAuth, body(schemas.updateVenue), async (req, res) => {
     'name', 'status', 'welcome_credits', 'crossfade_duration_seconds',
     'vibe_description', 'vibe_playlist_urls', 'vibe_mode_enabled',
     'vibe_current_video_index', 'vibe_current_position_seconds',
-    'jukebox_paused', 'queue_open_when_paused', 'vibe_played_video_ids',
+    'jukebox_paused', 'vibe_played_video_ids',
     'vibe_now_playing_title', 'vibe_now_playing_channel', 'vibe_now_playing_thumbnail',
     'vibe_source',
   ];

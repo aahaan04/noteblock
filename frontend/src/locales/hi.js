@@ -102,13 +102,9 @@ export default {
   resume: 'फिर शुरू करें',
   pause: 'रोकें',
   start: 'शुरू करें',
-  guestRequests: 'गेस्ट अनुरोध',
-  allowQueueWhenPaused: 'जुकबॉक्स बंद होने पर कतार की अनुमति दें',
-  allowQueueWhenPausedDesc: 'गेस्ट जुकबॉक्स शुरू होने से पहले भी गाने जोड़ सकते हैं। गाने तभी बजेंगे जब आप Start दबाएंगे।',
   vibeModeLabel: 'वाइब मोड',
   playbackCredits: 'प्लेबैक और क्रेडिट',
   guestsCannotRequest: 'जुकबॉक्स रुका होने पर गेस्ट गाने नहीं मांग सकते',
-  guestsCanQueuePaused: 'रुका होने पर भी गेस्ट गाने कतार में जोड़ सकते हैं',
   resetVibeHistory: 'वाइब इतिहास रीसेट करें',
   noSongsBanned: 'कोई गाना बैन नहीं है',
   roomUsers: 'रूम उपयोगकर्ता',
@@ -121,8 +117,6 @@ export default {
   noHistory: 'अभी तक कोई अनुरोध नहीं',
   jukeboxOff: 'जुकबॉक्स रुका हुआ है',
   jukeboxOffMsg: 'अभी गाने के अनुरोध बंद हैं। जल्द वापस आएं!',
-  queuingMode: 'कतार मोड',
-  queuingModeMsg: 'अभी गाने जोड़ें — होस्ट शुरू करने पर बजेंगे।',
 
   // Common
   loading: 'लोड हो रहा है…',

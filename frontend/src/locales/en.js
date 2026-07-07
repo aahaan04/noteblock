@@ -102,13 +102,9 @@ export default {
   resume: 'Resume',
   pause: 'Pause',
   start: 'Start',
-  guestRequests: 'Guest Requests',
-  allowQueueWhenPaused: 'Allow queuing while jukebox is off',
-  allowQueueWhenPausedDesc: 'Guests can browse and queue songs even before the jukebox starts. Songs play only once you hit Start.',
   vibeModeLabel: 'Vibe Mode',
   playbackCredits: 'Playback & Credits',
   guestsCannotRequest: 'Guests cannot request songs while paused',
-  guestsCanQueuePaused: 'Guests can queue songs while paused',
   resetVibeHistory: 'Reset Vibe History',
   noSongsBanned: 'No songs banned',
   roomUsers: 'Room Users',
@@ -121,8 +117,6 @@ export default {
   noHistory: 'No requests yet',
   jukeboxOff: 'Jukebox is paused',
   jukeboxOffMsg: 'Song requests are closed right now. Check back soon!',
-  queuingMode: 'Queuing mode',
-  queuingModeMsg: 'Add songs now — they play when the host starts.',
 
   // Common
   loading: 'Loading…',

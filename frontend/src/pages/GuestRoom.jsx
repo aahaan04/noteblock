@@ -467,7 +467,7 @@ export default function GuestRoom() {
     if (requestingKey || !venue) return;
     const isBanned = banned.some(b => b.youtube_video_id === song.videoId);
     if (isBanned) { showToast(t.songBanned); return; }
-    if (venue.jukebox_paused && !venue.queue_open_when_paused) { setPausedWarn(true); return; }
+    if (venue.jukebox_paused) { setPausedWarn(true); return; }
     const cost = playType === 'normal' ? 2 : quickPrice;
     if (credits < cost) { showToast(t.insufficientCredits); return; }
 
@@ -598,23 +598,13 @@ export default function GuestRoom() {
       {tab !== 'home' && (
         <div style={{ padding: '14px 16px 0' }}>
           {venue.jukebox_paused ? (
-            venue.queue_open_when_paused ? (
-              <div style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                <Pause size={24} color="#34d399" style={{ flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.jukeboxOff}</div>
-                  <div style={{ fontSize: 12, color: '#6ee7b7' }}>{t.queuingModeMsg}</div>
-                </div>
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Pause size={24} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.jukeboxOff}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t.jukeboxOffMsg}</div>
               </div>
-            ) : (
-              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                <Pause size={24} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.jukeboxOff}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t.jukeboxOffMsg}</div>
-                </div>
-              </div>
-            )
+            </div>
           ) : (
             <NowPlaying nowPlaying={nowPlaying} vibeActive={vibeActive} vibeTitle={venue.vibe_now_playing_title} vibeChannel={venue.vibe_now_playing_channel} vibeThumbnail={venue.vibe_now_playing_thumbnail} />
           )}

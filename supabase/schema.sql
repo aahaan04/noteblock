@@ -32,7 +32,6 @@ create table public.venues (
   vibe_current_video_index integer not null default 0,
   vibe_current_position_seconds float not null default 0,
   jukebox_paused boolean not null default false,
-  queue_open_when_paused boolean not null default false,
   vibe_played_video_ids text[] default '{}',
   vibe_now_playing_title text,
   vibe_now_playing_channel text,

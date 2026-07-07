@@ -439,17 +439,10 @@ export default function VenueControl() {
         )}
       </div>
       {venue.jukebox_paused && (
-        venue.queue_open_when_paused ? (
-          <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.4)', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
-            <ListMusic size={18} color="#34d399" style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 12, color: '#34d399', fontWeight: 600, lineHeight: 1.4 }}>{t.guestsCanQueuePaused}</span>
-          </div>
-        ) : (
-          <div style={{ background: '#2A1408', border: '1px solid #FF6B35', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
-            <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 12, color: 'var(--credits)', fontWeight: 600, lineHeight: 1.4 }}>{t.guestsCannotRequest}</span>
-          </div>
-        )
+        <div style={{ background: '#2A1408', border: '1px solid #FF6B35', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
+          <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: 'var(--credits)', fontWeight: 600, lineHeight: 1.4 }}>{t.guestsCannotRequest}</span>
+        </div>
       )}
     </div>
   );
@@ -728,7 +721,6 @@ function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePla
   const [enabled, setEnabled] = useState(venue.vibe_mode_enabled);
   const [crossfade, setCrossfade] = useState(venue.crossfade_duration_seconds);
   const [welcome, setWelcome] = useState(venue.welcome_credits);
-  const [queueWhenPaused, setQueueWhenPaused] = useState(venue.queue_open_when_paused ?? false);
   const [saving, setSaving] = useState(false);
 
   // Vibe source selector — which of the 4 sources is active for playback.
@@ -737,9 +729,6 @@ function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePla
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [downloading, setDownloading] = useState(false);
-
-  // Pending confirmation for queue-when-paused toggle
-  const [pendingToggle, setPendingToggle] = useState(null); // null | { newVal: bool }
 
   useEffect(() => {
     let cancelled = false;
@@ -816,58 +805,12 @@ function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePla
       vibe_mode_enabled: enabled,
       crossfade_duration_seconds: parseInt(crossfade),
       welcome_credits: parseInt(welcome),
-      queue_open_when_paused: queueWhenPaused,
     });
     setSaving(false);
   }
 
-  function requestQueueToggle() {
-    setPendingToggle({ newVal: !queueWhenPaused });
-  }
-
-  async function confirmQueueToggle() {
-    const newVal = pendingToggle.newVal;
-    setPendingToggle(null);
-    setQueueWhenPaused(newVal);
-    // Save immediately so it takes effect for guests right away
-    await onUpdate({ queue_open_when_paused: newVal });
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
-
-      {/* ── Guest requests ── */}
-      <SettingsBlock label={t.guestRequests}>
-        <Toggle
-          checked={queueWhenPaused}
-          onChange={requestQueueToggle}
-          label={t.allowQueueWhenPaused}
-          description={t.allowQueueWhenPausedDesc}
-        />
-      </SettingsBlock>
-
-      {/* Confirmation toast */}
-      {pendingToggle && (
-        <div style={{
-          background: 'var(--bg-card)', border: '1px solid #FF6B35',
-          borderRadius: 12, padding: '14px 16px',
-          display: 'flex', flexDirection: 'column', gap: 10,
-        }}>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-            {pendingToggle.newVal
-              ? 'Guests will be able to request songs while the jukebox is paused. Their songs will queue up and play when you start the jukebox.'
-              : 'Guests will NOT be able to request songs while the jukebox is paused. Requests will be blocked until you start the jukebox.'}
-          </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn-primary" style={{ flex: 1, fontSize: 13, height: 42, boxShadow: 'none' }} onClick={confirmQueueToggle}>
-              <Check size={14} /> Confirm
-            </button>
-            <button className="btn-secondary" style={{ flex: 1, fontSize: 13, height: 42 }} onClick={() => setPendingToggle(null)}>
-              <X size={14} /> Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ── Vibe mode ── */}
       <SettingsBlock label={t.vibeModeLabel}>

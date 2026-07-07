@@ -102,13 +102,9 @@ export default {
   resume: '继续',
   pause: '暂停',
   start: '开始',
-  guestRequests: '访客请求',
-  allowQueueWhenPaused: '点唱机关闭时允许排队',
-  allowQueueWhenPausedDesc: '访客可以在点唱机启动前添加歌曲。歌曲将在您点击开始后播放。',
   vibeModeLabel: '氛围模式',
   playbackCredits: '播放与积分',
   guestsCannotRequest: '点唱机暂停时访客无法请求歌曲',
-  guestsCanQueuePaused: '暂停时访客仍可排队点歌',
   resetVibeHistory: '重置氛围历史',
   noSongsBanned: '无封禁歌曲',
   roomUsers: '房间用户',
@@ -121,8 +117,6 @@ export default {
   noHistory: '暂无请求记录',
   jukeboxOff: '点唱机已暂停',
   jukeboxOffMsg: '歌曲请求目前已关闭，请稍后再来！',
-  queuingMode: '排队模式',
-  queuingModeMsg: '现在添加歌曲 — 主持人开始后将会播放。',
 
   // Common
   loading: '加载中…',

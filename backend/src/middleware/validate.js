@@ -41,7 +41,6 @@ export const schemas = {
     vibe_current_video_index: z.number().int().min(0).optional(),
     vibe_current_position_seconds: z.number().min(0).optional(),
     jukebox_paused: z.boolean().optional(),
-    queue_open_when_paused: z.boolean().optional(),
     vibe_played_video_ids: z.array(z.string().max(30)).max(2000).optional(),
     vibe_now_playing_title: z.string().trim().max(300).nullable().optional(),
     vibe_now_playing_channel: z.string().trim().max(200).nullable().optional(),
