@@ -410,7 +410,13 @@ export default function GuestRoom() {
     setBanned(b);
   }
 
-  // Real-time + 30s polling fallback
+  // Real-time + polling fallback. Established the instant venue.id is known —
+  // no gating on any guest action. Both channels also re-fetch once on the
+  // SUBSCRIBED callback: the initial REST fetch (loadVenue/loadQueue) and the
+  // moment the realtime channel actually joins are two separate async events,
+  // and anything the host changed in between (e.g. a song already playing
+  // before this guest connected) would otherwise never be picked up until
+  // the next poll tick or a guest-initiated action forced a re-fetch.
   useEffect(() => {
     if (!venue) return;
     const qSub = supabase
@@ -419,7 +425,7 @@ export default function GuestRoom() {
         event: '*', schema: 'public', table: 'queue_items',
         filter: `venue_id=eq.${venue.id}`,
       }, () => loadQueue(venue.id))
-      .subscribe();
+      .subscribe((status) => { if (status === 'SUBSCRIBED') loadQueue(venue.id); });
     const vSub = supabase
       .channel(`guest-venue-${venue.id}`)
       .on('postgres_changes', {
@@ -430,9 +436,10 @@ export default function GuestRoom() {
         // can carry a stale jukebox_paused and clobber the banner. Re-fetch instead.
         refreshVenue();
       })
-      .subscribe();
-    // 30-second fallback poll catches any subscription drops without hammering the API.
-    const poll = setInterval(() => { loadQueue(venue.id); refreshVenue(); }, 30000);
+      .subscribe((status) => { if (status === 'SUBSCRIBED') refreshVenue(); });
+    // Fast fallback poll — catches any subscription drop without waiting long
+    // enough for a paused/skipped song to feel broken to someone watching.
+    const poll = setInterval(() => { loadQueue(venue.id); refreshVenue(); }, 5000);
     return () => { supabase.removeChannel(qSub); supabase.removeChannel(vSub); clearInterval(poll); };
   }, [venue?.id]); // eslint-disable-line
 

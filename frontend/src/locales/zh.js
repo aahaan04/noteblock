@@ -29,6 +29,8 @@ export default {
   manageVenue: '管理',
   active: '活跃',
   closed: '已关闭',
+  playing: '播放中',
+  paused: '已暂停',
   roomCode: '房间码',
   downloadQR: '下载二维码',
 

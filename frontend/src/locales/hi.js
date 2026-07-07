@@ -29,6 +29,8 @@ export default {
   manageVenue: 'प्रबंधित करें',
   active: 'सक्रिय',
   closed: 'बंद',
+  playing: 'चल रहा है',
+  paused: 'रुका हुआ',
   roomCode: 'रूम कोड',
   downloadQR: 'QR डाउनलोड करें',
 

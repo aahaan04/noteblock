@@ -29,6 +29,8 @@ export default {
   manageVenue: 'Manage',
   active: 'Active',
   closed: 'Closed',
+  playing: 'Playing',
+  paused: 'Paused',
   roomCode: 'Room Code',
   downloadQR: 'Download QR',
 

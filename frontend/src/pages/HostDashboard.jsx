@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, Plus, QrCode, Home, Users, ListMusic, Radio } from 'lucide-react';
+import { Settings, Plus, QrCode, Home, Users, ListMusic, Radio, Play, Pause } from 'lucide-react';
 
 const HOST_FONT = "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
@@ -49,7 +49,7 @@ export default function HostDashboard() {
     setLoading(true);
     const { data, error } = await supabase
       .from('venues')
-      .select('id, host_id, name, room_code, status, vibe_mode_enabled')
+      .select('id, host_id, name, room_code, status, vibe_mode_enabled, jukebox_paused')
       .eq('host_id', user.id)
       .order('created_at', { ascending: false });
     if (!error) setVenues(data ?? []);
@@ -57,6 +57,23 @@ export default function HostDashboard() {
   }
 
   const venueIdsKey = venues.map(v => v.id).join(',');
+
+  // Keep room status / playback status / vibe toggle live on the card without
+  // requiring a full page reload — e.g. pausing from the Manage Venue screen
+  // should be reflected here the moment the host navigates back, or live if
+  // this tab is left open on another device.
+  useEffect(() => {
+    if (!venues.length) return;
+    const sub = supabase
+      .channel('host-dashboard-venue-status')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venues', filter: `host_id=eq.${user.id}` }, (payload) => {
+        setVenues(prev => prev.map(v => v.id === payload.new.id
+          ? { ...v, status: payload.new.status, jukebox_paused: payload.new.jukebox_paused, vibe_mode_enabled: payload.new.vibe_mode_enabled }
+          : v));
+      })
+      .subscribe();
+    return () => supabase.removeChannel(sub);
+  }, [venueIdsKey]); // eslint-disable-line
 
   // Live pending-queue count per venue, kept fresh via realtime subscription.
   useEffect(() => {
@@ -111,7 +128,7 @@ export default function HostDashboard() {
     const { data, error } = await supabase
       .from('venues')
       .insert({ host_id: user.id, name: newName.trim(), room_code: makeRoomCode(), welcome_credits: 10, crossfade_duration_seconds: 5 })
-      .select('id, host_id, name, room_code, status, vibe_mode_enabled').single();
+      .select('id, host_id, name, room_code, status, vibe_mode_enabled, jukebox_paused').single();
     if (error) { setCreateError(error.message); } else {
       setVenues(prev => [data, ...prev]);
       setNewName(''); setShowCreate(false);
@@ -232,7 +249,7 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobi
   async function toggleStatus() {
     setToggling(true);
     const newStatus = venue.status === 'active' ? 'closed' : 'active';
-    const { data } = await supabase.from('venues').update({ status: newStatus }).eq('id', venue.id).select('id, host_id, name, room_code, status, vibe_mode_enabled').single();
+    const { data } = await supabase.from('venues').update({ status: newStatus }).eq('id', venue.id).select('id, host_id, name, room_code, status, vibe_mode_enabled, jukebox_paused').single();
     if (data) onStatusChange(data);
     setToggling(false);
   }
@@ -255,20 +272,36 @@ function VenueCard({ venue, onManage, showQR, onToggleQR, onStatusChange, isMobi
             {venue.room_code}
           </span>
         </div>
-        {isActive ? (
-          <span style={{
-            display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
-            background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)',
-            borderRadius: 20, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: '#4ADE80',
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ADE80' }} />
-            {t.active}
-          </span>
-        ) : (
-          <span style={{ flexShrink: 0, background: 'var(--border)', color: 'var(--text-muted)', borderRadius: 20, padding: '6px 12px', fontSize: 12, fontWeight: 700 }}>
-            {t.closed}
-          </span>
-        )}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+          {/* Room status: whether guests can join at all — independent of playback. */}
+          {isActive ? (
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)',
+              borderRadius: 20, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: '#4ADE80',
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ADE80' }} />
+              {t.active}
+            </span>
+          ) : (
+            <span style={{ background: 'var(--border)', color: 'var(--text-muted)', borderRadius: 20, padding: '6px 12px', fontSize: 12, fontWeight: 700 }}>
+              {t.closed}
+            </span>
+          )}
+          {/* Playback status: whether the jukebox is actually playing or paused —
+              a separate concept from room status, only meaningful while the room is open. */}
+          {isActive && (
+            venue.jukebox_paused ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--border)', color: 'var(--text-muted)', borderRadius: 20, padding: '5px 11px', fontSize: 11, fontWeight: 700 }}>
+                <Pause size={11} /> {t.paused}
+              </span>
+            ) : (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ADE80', borderRadius: 20, padding: '5px 11px', fontSize: 11, fontWeight: 700 }}>
+                <Play size={11} /> {t.playing}
+              </span>
+            )
+          )}
+        </div>
       </div>
 
       {/* Live stat row */}
