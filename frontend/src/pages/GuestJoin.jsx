@@ -1,28 +1,27 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Mail, User, ArrowRight, Music, CheckCircle, Loader } from 'lucide-react';
+import { ArrowRight, Music, Loader } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
+import PhoneAuthFlow from '../components/PhoneAuthFlow.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
-import { supabase } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
 
 export default function GuestJoin() {
   const { roomCode } = useParams();
-  const { profile, token, loading, sendMagicLink, refreshProfile } = useAuth();
+  const { profile, token, loading, refreshProfile } = useAuth();
   const { t } = useLang();
   const navigate = useNavigate();
 
   const [venue, setVenue] = useState(null);
   const [venueError, setVenueError] = useState('');
 
-  // 'detecting' → waiting for auth/venue to resolve (shown on magic-link redirect)
-  // 'email'     → not logged in, enter email
-  // 'sent'      → magic link sent, waiting
-  // 'name'      → new user, pick display name
+  // 'detecting' → waiting for auth/venue to resolve
+  // 'phone'     → not logged in, run the phone + WhatsApp OTP flow
+  // 'name'      → returning user whose display name still looks like a
+  //               leftover default and has never confirmed a real one
   const [phase, setPhase] = useState('detecting');
-  const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -43,24 +42,26 @@ export default function GuestJoin() {
     if (loading || !venue) return; // still waiting
 
     if (!token) {
-      // Not logged in — show email form
-      setPhase('email');
+      setPhase('phone');
       return;
     }
 
-    // Already logged in (returning user OR just clicked magic link)
+    // Already logged in (returning session)
     if (joinedRef.current) return;
 
-    // A freshly-created profile defaults its name to the email prefix (or "User").
-    // Prompt those users to pick a real name — but once they've confirmed a name
-    // we remember it (per user, locally) so a returning user whose chosen name
-    // happens to equal their email prefix isn't asked again on every visit.
+    // A freshly-created profile defaults its name to a placeholder (or is
+    // null for phone-native signups, which are already prompted inline by
+    // PhoneAuthFlow — this only catches OLD accounts with a leftover
+    // default). Prompt those users to pick a real name — but once they've
+    // confirmed a name we remember it (per user, locally) so a returning
+    // user whose chosen name happens to equal the placeholder isn't asked
+    // again on every visit.
     const emailPrefix = profile?.email?.split('@')[0] ?? '';
     const alreadyNamed = profile?.id && localStorage.getItem(`nb_named_${profile.id}`) === '1';
     const looksDefault =
       !profile?.display_name ||
-      profile.display_name === emailPrefix ||
-      profile.display_name === 'User';
+      profile.display_name === 'User' ||
+      (emailPrefix && profile.display_name === emailPrefix);
     const needsName = looksDefault && !alreadyNamed;
 
     if (needsName) {
@@ -79,21 +80,6 @@ export default function GuestJoin() {
     navigate(`/room/${roomCode}`, { replace: true });
   }
 
-  async function handleSendLink(e) {
-    e?.preventDefault();
-    setError('');
-    const addr = email.trim().toLowerCase();
-    if (!addr || !addr.includes('@')) { setError('Enter a valid email address.'); return; }
-    setBusy(true);
-    try {
-      const redirectTo = `${window.location.origin}/join/${roomCode}`;
-      await sendMagicLink(addr, redirectTo);
-      setPhase('sent');
-    } catch (err) {
-      setError(err.message ?? 'Could not send link. Try again.');
-    } finally { setBusy(false); }
-  }
-
   async function handleSetName(e) {
     e?.preventDefault();
     setError('');
@@ -101,11 +87,7 @@ export default function GuestJoin() {
     if (!name) { setError('Enter a display name.'); return; }
     setBusy(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const tok = session?.access_token ?? token;
-      await api.users.updateProfile({ display_name: name }, tok);
-      // Remember that this user has confirmed a display name so we don't
-      // re-prompt them on future joins (even if it matches their email prefix).
+      await api.users.updateProfile({ display_name: name }, token);
       if (profile?.id) localStorage.setItem(`nb_named_${profile.id}`, '1');
       await refreshProfile();
       await joinRoom();
@@ -157,58 +139,24 @@ export default function GuestJoin() {
           <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: 13 }}>Request songs for this venue</p>
         </div>
 
-        {/* ── Phase: email ── */}
-        {phase === 'email' && (
-          <form onSubmit={handleSendLink} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <input
-              className="input"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              autoFocus
-              style={{ fontSize: 16, height: 48, paddingLeft: 16, paddingRight: 16 }}
-            />
-            {error && <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>{error}</p>}
-            <button className="btn-primary" type="submit" disabled={busy}
-              style={{ width: '100%', height: 52, fontSize: 16, boxShadow: '0 0 20px rgba(255,107,53,0.4)' }}>
-              {busy ? 'Sending...' : <><Mail size={16} /> Send Magic Link</>}
-            </button>
+        {/* ── Phase: phone + WhatsApp OTP ── */}
+        {phase === 'phone' && (
+          <>
+            <PhoneAuthFlow onDone={() => joinRoom()} />
             {venue.welcome_credits > 0 && (
-              <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+              <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', margin: '16px 0 0' }}>
                 Get {venue.welcome_credits} <strong style={{ color: 'var(--credits)' }}>free credits</strong> on first visit
               </p>
             )}
-          </form>
+          </>
         )}
 
-        {/* ── Phase: sent ── */}
-        {phase === 'sent' && (
-          <div style={{ textAlign: 'center' }}>
-            <CheckCircle size={56} color="#34d399" style={{ marginBottom: 16 }} />
-            <h2 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 20 }}>Check your email</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: '0 0 16px' }}>
-              We sent a magic link to<br />
-              <strong style={{ color: 'var(--text-primary)' }}>{email}</strong>
-            </p>
-            <p style={{ color: 'var(--text-muted)', fontSize: 12, margin: '0 0 20px' }}>
-              Click the link to be taken straight into the room.
-            </p>
-            <button
-              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13 }}
-              onClick={() => { setPhase('email'); setError(''); }}
-            >
-              Use a different email
-            </button>
-          </div>
-        )}
-
-        {/* ── Phase: name ── */}
+        {/* ── Phase: name (returning account with a leftover default name) ── */}
         {phase === 'name' && (
           <form onSubmit={handleSetName} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                <User size={12} /> Your display name
+                {t.displayName}
               </label>
               <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--text-secondary)' }}>
                 This is how you appear when requesting songs.

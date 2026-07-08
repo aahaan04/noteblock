@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Sun, Moon } from 'lucide-react';
 import VersionFooter from '../components/VersionFooter.jsx';
+import PhoneLinkPrompt from '../components/PhoneLinkPrompt.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
@@ -38,6 +39,8 @@ export default function Settings() {
       </button>
 
       <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 28, color: 'var(--text-primary)' }}>{t.settingsTitle}</h1>
+
+      <PhoneLinkPrompt />
 
       {/* Dark / Light toggle */}
       <div style={{

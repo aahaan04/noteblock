@@ -20,6 +20,7 @@ const safeName = (max = 100) =>
   z.string().trim().min(1).max(max).transform(clean);
 const optUrl = z.string().url().max(500).nullable().optional();
 const videoId = z.string().regex(/^[a-zA-Z0-9_-]{11}$/, 'Invalid YouTube video ID');
+const phoneE164 = z.string().regex(/^\+[1-9]\d{6,14}$/, 'Enter a valid phone number with country code');
 
 export const schemas = {
   // POST /api/venues
@@ -87,5 +88,19 @@ export const schemas = {
   updateProfile: z.object({
     display_name: safeName(50).optional(),
     language: z.enum(['en', 'hi', 'zh']).optional(),
+  }),
+
+  // POST /api/auth/otp/start
+  otpStart: z.object({
+    phone_number: phoneE164,
+  }),
+
+  // POST /api/auth/otp/verify
+  // 'role' only affects brand-new accounts — ignored for existing users and
+  // for the "link phone to my current session" path.
+  otpVerify: z.object({
+    phone_number: phoneE164,
+    code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+    role: z.enum(['host', 'guest']).optional(),
   }),
 };

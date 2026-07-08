@@ -10,6 +10,8 @@ create extension if not exists "uuid-ossp";
 create table public.users (
   id uuid references auth.users(id) on delete cascade primary key,
   email text,
+  phone_number text unique,
+  phone_verified boolean not null default false,
   display_name text,
   role text check (role in ('host', 'guest')) not null default 'guest',
   credits_balance integer not null default 0,

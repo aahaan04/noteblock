@@ -69,4 +69,9 @@ export const api = {
     purchaseIntent: (body, t) => post('/api/credits/purchase-intent', body, t),
     verify: (body, t) => post('/api/credits/verify', body, t),
   },
+
+  auth: {
+    otpStart: (body) => post('/api/auth/otp/start', body),
+    otpVerify: (body, t) => post('/api/auth/otp/verify', body, t),
+  },
 };

@@ -5,7 +5,7 @@ export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY,
   {
     auth: {
-      detectSessionInUrl: true,   // picks up magic link token from URL automatically
+      detectSessionInUrl: true,   // harmless no-op now (no more email-link redirects), left on
       persistSession: true,       // remembers the session across visits
       autoRefreshToken: true,
     },

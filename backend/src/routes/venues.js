@@ -206,18 +206,22 @@ router.get('/:id/users', requireAuth, async (req, res) => {
     if (item.requested_at > userMap[name].lastSeen) userMap[name].lastSeen = item.requested_at;
   }
 
+  // "Verified" means phone-verified, not merely "has an account" — an
+  // unverified account (old email signup that never linked a phone, or in
+  // theory a row with no verification at all) should not show the badge.
   const requesterNames = Object.keys(userMap);
-  let registeredNames = new Set();
+  let verifiedNames = new Set();
   if (requesterNames.length) {
     const { data: profiles } = await supabaseAdmin
       .from('users')
       .select('display_name')
-      .in('display_name', requesterNames);
-    registeredNames = new Set((profiles ?? []).map(p => p.display_name));
+      .in('display_name', requesterNames)
+      .eq('phone_verified', true);
+    verifiedNames = new Set((profiles ?? []).map(p => p.display_name));
   }
 
   const users = Object.values(userMap)
-    .map(u => ({ ...u, banned: bannedNames.has(u.name), isRegistered: registeredNames.has(u.name) }))
+    .map(u => ({ ...u, banned: bannedNames.has(u.name), isRegistered: verifiedNames.has(u.name) }))
     .sort((a, b) => b.requests - a.requests);
 
   res.json({ users, bannedUsers: bannedUsers ?? [] });

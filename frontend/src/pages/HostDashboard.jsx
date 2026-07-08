@@ -15,6 +15,7 @@ function useIsMobile() {
 }
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
+import PhoneLinkPrompt from '../components/PhoneLinkPrompt.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -169,6 +170,8 @@ export default function HostDashboard() {
         padding: isMobile ? '24px 16px' : '40px 48px',
         background: 'radial-gradient(ellipse at 50% 0%, rgba(255,107,53,0.05) 0%, transparent 55%), var(--bg-page)',
       }}>
+        <PhoneLinkPrompt />
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 14 }}>
           <div>
             <div style={{ fontSize: isMobile ? 22 : 26, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>{t.myVenues}</div>

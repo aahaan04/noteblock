@@ -17,6 +17,7 @@ import NowPlaying from '../components/NowPlaying.jsx';
 import NowPlayingHome from '../components/NowPlayingHome.jsx';
 import CreditBalance from '../components/CreditBalance.jsx';
 import SongThumb from '../components/SongThumb.jsx';
+import PhoneLinkPrompt from '../components/PhoneLinkPrompt.jsx';
 
 const decode = s => s?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? s;
 
@@ -600,6 +601,12 @@ export default function GuestRoom() {
           <Settings size={16} />
         </button>
       </div>
+
+      {tab !== 'home' && (
+        <div style={{ padding: '14px 16px 0' }}>
+          <PhoneLinkPrompt />
+        </div>
+      )}
 
       {/* ── Status area — hidden on the Home tab, which shows its own big now-playing view ── */}
       {tab !== 'home' && (

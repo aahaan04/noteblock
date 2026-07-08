@@ -12,6 +12,7 @@ import queueRouter from './routes/queue.js';
 import youtubeRouter from './routes/youtube.js';
 import usersRouter from './routes/users.js';
 import creditsRouter from './routes/credits.js';
+import authRouter from './routes/auth.js';
 import { startVibeAggregationSchedule } from './jobs/vibeAggregation.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -80,6 +81,7 @@ app.use('/api/venues/:venueId/queue', corsMiddleware, queueRouter);
 app.use('/api/youtube', corsMiddleware, youtubeRouter);
 app.use('/api/users', corsMiddleware, usersRouter);
 app.use('/api/credits', corsMiddleware, creditsRouter);
+app.use('/api/auth', corsMiddleware, authRouter);
 
 // ── Serve built frontend (production) ────────────────────────────────────────
 const frontendDist = join(__dirname, '../../frontend/dist');
