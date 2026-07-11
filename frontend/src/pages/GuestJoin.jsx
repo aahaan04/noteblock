@@ -18,7 +18,7 @@ export default function GuestJoin() {
   const [venueError, setVenueError] = useState('');
 
   // 'detecting' → waiting for auth/venue to resolve
-  // 'phone'     → not logged in, run the phone + WhatsApp OTP flow
+  // 'phone'     → not logged in, run the phone + SMS OTP flow
   // 'name'      → returning user whose display name still looks like a
   //               leftover default and has never confirmed a real one
   const [phase, setPhase] = useState('detecting');
@@ -139,7 +139,7 @@ export default function GuestJoin() {
           <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: 13 }}>Request songs for this venue</p>
         </div>
 
-        {/* ── Phase: phone + WhatsApp OTP ── */}
+        {/* ── Phase: phone + SMS OTP ── */}
         {phase === 'phone' && (
           <>
             <PhoneAuthFlow onDone={() => joinRoom()} />

@@ -4,24 +4,24 @@ import { supabaseAdmin, supabasePublic } from '../lib/supabase.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { body, schemas } from '../middleware/validate.js';
 import { otpStartLimiter, otpVerifyLimiter } from '../middleware/rateLimits.js';
-import { startWhatsappVerification, checkWhatsappVerification } from '../lib/twilio.js';
+import { startSmsVerification, checkSmsVerification } from '../lib/twilio.js';
 
 const router = Router();
 
-const SEND_FAILED_MSG = "We couldn't send a code to this number on WhatsApp. Please check the number and try again.";
+const SEND_FAILED_MSG = "We couldn't send a code to this number. Please check the number and try again.";
 const CHECK_FAILED_MSG = "We couldn't verify that code. Please request a new one.";
 const WRONG_CODE_MSG = 'That code is incorrect or has expired. Please try again.';
 const PHONE_TAKEN_MSG = 'This phone number is already linked to a different account.';
 
-// POST /api/auth/otp/start — send a 6-digit code via WhatsApp (Twilio Verify).
-// No SMS fallback. Rate limited per phone number, on top of the global
-// per-IP limiter already applied to all /api routes.
+// POST /api/auth/otp/start — send a 6-digit code via SMS (Twilio Verify).
+// Rate limited per phone number, on top of the global per-IP limiter
+// already applied to all /api routes.
 router.post('/otp/start', otpStartLimiter, body(schemas.otpStart), async (req, res) => {
   try {
-    await startWhatsappVerification(req.body.phone_number);
+    await startSmsVerification(req.body.phone_number);
     res.json({ success: true });
   } catch (err) {
-    console.error('[auth/otp/start]', err.message);
+    console.error('[auth/otp/start]', `code=${err.code}`, `status=${err.status}`, err.message, err.moreInfo ?? '');
     res.status(400).json({ error: SEND_FAILED_MSG });
   }
 });
@@ -41,7 +41,7 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
 
   let approved;
   try {
-    approved = await checkWhatsappVerification(phone_number, code);
+    approved = await checkSmsVerification(phone_number, code);
   } catch (err) {
     console.error('[auth/otp/verify check]', err.message);
     return res.status(400).json({ error: CHECK_FAILED_MSG });

@@ -12,12 +12,12 @@ export default {
   guestNote: '登录以保存积分，或匿名继续。',
   anonymousCreditWarning: '关闭浏览器后积分将丢失。',
 
-  // Phone + WhatsApp OTP auth
-  phoneAuthNote: '输入您的手机号码，我们将通过 WhatsApp 发送 6 位验证码 — 无需密码。',
+  // Phone + SMS OTP auth
+  phoneAuthNote: '输入您的手机号码，我们将通过短信发送 6 位验证码 — 无需密码。',
   sendCode: '发送验证码',
   sendingCode: '发送中…',
   otpSentTo: '我们已发送 6 位验证码至',
-  viaWhatsapp: '通过 WhatsApp。',
+  viaSms: '通过短信。',
   verifyCode: '验证',
   changeNumber: '更改号码',
   resendCode: '重新发送',

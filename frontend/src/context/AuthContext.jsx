@@ -82,7 +82,7 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // Sends a 6-digit WhatsApp OTP via the backend (Twilio Verify). No session
+  // Sends a 6-digit SMS OTP via the backend (Twilio Verify). No session
   // exists yet at this point — this is just the "send code" step.
   async function sendOtp(phoneNumber) {
     await api.auth.otpStart({ phone_number: phoneNumber });

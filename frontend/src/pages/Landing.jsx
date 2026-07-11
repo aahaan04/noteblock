@@ -142,7 +142,7 @@ export default function Landing() {
     </div>
   );
 
-  // ── Host: phone + WhatsApp OTP auth ───────────────────────────────────────────
+  // ── Host: phone + SMS OTP auth ────────────────────────────────────────────────
   return (
     <div className="center-screen">
       <div style={{ width: '100%', maxWidth: 360, padding: '0 4px' }}>

@@ -12,12 +12,12 @@ export default {
   guestNote: 'क्रेडिट बचाने के लिए साइन इन करें। या अनाम रूप से जारी रखें।',
   anonymousCreditWarning: 'ब्राउज़र बंद होने पर क्रेडिट खो जाएंगे।',
 
-  // Phone + WhatsApp OTP auth
-  phoneAuthNote: 'अपना फोन नंबर डालें, हम WhatsApp पर 6-अंकों का कोड भेजेंगे — पासवर्ड की जरूरत नहीं।',
+  // Phone + SMS OTP auth
+  phoneAuthNote: 'अपना फोन नंबर डालें, हम SMS पर 6-अंकों का कोड भेजेंगे — पासवर्ड की जरूरत नहीं।',
   sendCode: 'कोड भेजें',
   sendingCode: 'भेजा जा रहा है…',
   otpSentTo: 'हमने 6-अंकों का कोड भेजा है',
-  viaWhatsapp: 'WhatsApp के जरिए।',
+  viaSms: 'SMS के जरिए।',
   verifyCode: 'कोड जांचें',
   changeNumber: 'नंबर बदलें',
   resendCode: 'कोड फिर भेजें',

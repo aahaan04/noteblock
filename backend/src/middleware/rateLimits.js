@@ -38,7 +38,7 @@ export const youtubeLimiter = rateLimit({
   message: { error: 'Too many search requests, please slow down' },
 });
 
-// Phone-number-keyed limiters for the WhatsApp OTP flow — separate from the
+// Phone-number-keyed limiters for the SMS OTP flow — separate from the
 // IP-based limiters above since the abuse vector here is "many codes to one
 // number," not "many requests from one IP." Falls back to IP only if the
 // body hasn't been parsed/validated yet (defensive; body() runs after these

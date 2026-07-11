@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import PhoneInput, { toE164 } from './PhoneInput.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase.js';
 
 const RESEND_COOLDOWN_SECS = 30;
 
-// Shared phone-number -> WhatsApp OTP -> (display name, for new accounts)
+// Shared phone-number -> SMS OTP -> (display name, for new accounts)
 // flow, used by the host login screen, the guest join screen, and the
 // "link your phone" prompt for pre-existing email-only accounts. Callers own
 // all page chrome (header, back button, navigation after completion) — this
@@ -143,8 +143,8 @@ export default function PhoneAuthFlow({ role, linking = false, onDone }) {
     return (
       <form onSubmit={handleVerify} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 4px', lineHeight: 1.5, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-          <MessageCircle size={15} color="#25D366" style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>{t.otpSentTo} <strong style={{ color: 'var(--text-primary)' }}>{phoneE164}</strong> {t.viaWhatsapp}</span>
+          <MessageSquare size={15} color="#FF6B35" style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>{t.otpSentTo} <strong style={{ color: 'var(--text-primary)' }}>{phoneE164}</strong> {t.viaSms}</span>
         </p>
         <input
           className="input"

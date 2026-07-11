@@ -12,12 +12,12 @@ export default {
   guestNote: 'Sign in to keep your credits. Or continue anonymously (session only).',
   anonymousCreditWarning: 'Credits will be lost when you close the browser.',
 
-  // Phone + WhatsApp OTP auth
-  phoneAuthNote: "Enter your phone number and we'll send you a 6-digit code on WhatsApp — no password needed.",
+  // Phone + SMS OTP auth
+  phoneAuthNote: "Enter your phone number and we'll send you a 6-digit code by SMS — no password needed.",
   sendCode: 'Send Code',
   sendingCode: 'Sending…',
   otpSentTo: 'We sent a 6-digit code to',
-  viaWhatsapp: 'via WhatsApp.',
+  viaSms: 'by SMS.',
   verifyCode: 'Verify Code',
   changeNumber: 'Change number',
   resendCode: 'Resend code',
