@@ -203,16 +203,17 @@ export default function HostDashboard() {
         {showCreate && (
           <form onSubmit={createVenue} style={{
             background: 'var(--bg-card)', border: '1px solid #FF6B35',
-            borderRadius: 14, padding: 18, marginBottom: 24,
-            display: 'flex', flexDirection: 'column', gap: 12,
+            borderRadius: 14, padding: 16, marginBottom: 24,
+            maxWidth: isMobile ? '100%' : 420,
+            display: 'flex', flexDirection: 'column', gap: 10,
           }}>
             <input className="input" placeholder={t.venueName}
               value={newName} onChange={e => setNewName(e.target.value)} autoFocus required />
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn-primary" type="submit" disabled={creating} style={{ flex: 1 }}>
+              <button className="btn-primary" type="submit" disabled={creating} style={{ flex: 1, height: 44 }}>
                 {creating ? t.loading : t.createVenue}
               </button>
-              <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)} style={{ flex: 1, height: 52 }}>
+              <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)} style={{ flex: 1, height: 44 }}>
                 {t.cancel}
               </button>
             </div>
