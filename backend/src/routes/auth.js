@@ -78,10 +78,16 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
 
   // ── Fresh login or signup ──
   const { data: existing } = await supabaseAdmin
-    .from('users').select('id').eq('phone_number', phone_number).maybeSingle();
+    .from('users').select('id, display_name').eq('phone_number', phone_number).maybeSingle();
 
   let userId = existing?.id;
-  let isNewUser = false;
+  // Whether to send this login through the display-name prompt. Driven by
+  // "does this account actually have a name yet," not "did we just create
+  // the row this request" — an account whose creation partially succeeded
+  // on an earlier attempt (e.g. phone_number got set but the flow then
+  // failed on a later step before ever reaching the name prompt) would
+  // otherwise be misclassified as "existing" forever and never get asked.
+  let isNewUser = !existing?.display_name;
 
   if (!userId) {
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({

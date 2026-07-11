@@ -219,8 +219,8 @@ export default function HostDashboard() {
         {!loading && venues.length === 0 && (
           <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '3rem 0' }}>
             <Home size={48} color="var(--border)" style={{ marginBottom: 12 }} />
-            <p>{t.noVenues}</p>
-            <button className="btn-primary" onClick={() => setShowCreate(true)}>
+            <p style={{ marginBottom: 20, fontSize: 15 }}>{t.noVenues}</p>
+            <button className="btn-primary" onClick={() => setShowCreate(true)} style={{ padding: '12px 22px' }}>
               <Plus size={16} /> {t.createVenue}
             </button>
           </div>
