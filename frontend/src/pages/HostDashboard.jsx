@@ -140,7 +140,7 @@ export default function HostDashboard() {
   const activeCount = venues.filter(v => v.status === 'active').length;
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-page)', fontFamily: HOST_FONT }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-page)', fontFamily: HOST_FONT }}>
       {/* ── Top bar ── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -167,11 +167,16 @@ export default function HostDashboard() {
 
       {/* ── Body ── */}
       <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
         padding: isMobile ? '24px 16px' : '40px 48px',
         background: 'radial-gradient(ellipse at 50% 0%, rgba(255,107,53,0.05) 0%, transparent 55%), var(--bg-page)',
       }}>
         <PhoneLinkPrompt />
 
+        {/* Redundant with the empty state's own heading + button below, so
+            hidden while that's showing — keeps the empty state truly
+            centered instead of pinned under a header. */}
+        {!(!loading && venues.length === 0 && !showCreate) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 14 }}>
           <div>
             <div style={{ fontSize: isMobile ? 22 : 26, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>{t.myVenues}</div>
@@ -192,6 +197,7 @@ export default function HostDashboard() {
             <Plus size={15} /> {t.createVenue}
           </button>
         </div>
+        )}
 
         {/* ── Create form ── */}
         {showCreate && (
@@ -216,8 +222,8 @@ export default function HostDashboard() {
 
         {loading && <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>{t.loading}</p>}
 
-        {!loading && venues.length === 0 && (
-          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '3rem 0' }}>
+        {!loading && venues.length === 0 && !showCreate && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--text-secondary)' }}>
             <Home size={48} color="var(--border)" style={{ marginBottom: 12 }} />
             <p style={{ marginBottom: 20, fontSize: 15 }}>{t.noVenues}</p>
             <button className="btn-primary" onClick={() => setShowCreate(true)} style={{ padding: '12px 22px' }}>
