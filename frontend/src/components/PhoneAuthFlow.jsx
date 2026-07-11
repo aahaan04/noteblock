@@ -8,18 +8,6 @@ import { supabase } from '../lib/supabase.js';
 
 const RESEND_COOLDOWN_SECS = 30;
 
-// The backend attaches stage/detail to 500s from the verify endpoint so a
-// failure is reportable straight from the screen, no server log access
-// needed. Safe to show: detail only ever appears after the phone number has
-// already passed Twilio's own OTP check, so this isn't an open information
-// disclosure surface.
-function describeError(err, fallback) {
-  const data = err?.data ?? {};
-  const base = data.error ?? err?.message ?? fallback;
-  if (data.stage) return `${base} (${data.stage}${data.detail ? `: ${data.detail}` : ''})`;
-  return base;
-}
-
 // Shared phone-number -> SMS OTP -> (display name, for new accounts)
 // flow, used by the host login screen, the guest join screen, and the
 // "link your phone" prompt for pre-existing email-only accounts. Callers own
@@ -72,7 +60,7 @@ export default function PhoneAuthFlow({ role, linking = false, onDone }) {
       setPhase('otp');
       startCooldown();
     } catch (err) {
-      setError(describeError(err, t.error));
+      setError(err.data?.error ?? err.message ?? t.error);
     } finally { setSubmitting(false); }
   }
 
@@ -84,7 +72,7 @@ export default function PhoneAuthFlow({ role, linking = false, onDone }) {
       await sendOtp(phoneE164);
       startCooldown();
     } catch (err) {
-      setError(describeError(err, t.error));
+      setError(err.data?.error ?? err.message ?? t.error);
     } finally { setSubmitting(false); }
   }
 
@@ -106,7 +94,7 @@ export default function PhoneAuthFlow({ role, linking = false, onDone }) {
         onDone?.({ isNewUser: false });
       }
     } catch (err) {
-      setError(describeError(err, t.error));
+      setError(err.data?.error ?? err.message ?? t.error);
     } finally { setSubmitting(false); }
   }
 
@@ -124,7 +112,7 @@ export default function PhoneAuthFlow({ role, linking = false, onDone }) {
       await refreshProfile();
       onDone?.({ isNewUser: true });
     } catch (err) {
-      setError(describeError(err, t.error));
+      setError(err.data?.error ?? err.message ?? t.error);
     } finally { setSubmitting(false); }
   }
 

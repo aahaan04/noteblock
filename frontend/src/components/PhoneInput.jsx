@@ -24,26 +24,38 @@ export function toE164(country, nationalNumber) {
 
 export default function PhoneInput({ country, onCountryChange, value, onChange, autoFocus }) {
   const callingCode = useMemo(() => getCountryCallingCode(country), [country]);
+  const selectedName = useMemo(() => COUNTRIES.find(c => c.code === country)?.name ?? country, [country]);
 
   return (
     <div style={{ display: 'flex', gap: 8 }}>
+      {/* min-width: 0 is required here — without it a flex child holding a
+          native <select> won't shrink below its content's intrinsic width,
+          so a long country name silently pushes the row wider than its
+          container instead of truncating, shoving other elements off. */}
       <select
         className="input"
         value={country}
         onChange={e => onCountryChange(e.target.value)}
-        style={{ flex: '0 0 130px', width: 130, cursor: 'pointer' }}
+        title={selectedName}
+        style={{
+          flex: '0 1 40%', minWidth: 0, cursor: 'pointer',
+          textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap',
+        }}
       >
         {COUNTRIES.map(c => (
           <option key={c.code} value={c.code}>{c.name} (+{c.calling})</option>
         ))}
       </select>
-      <div style={{ position: 'relative', flex: 1 }}>
+      <div style={{ position: 'relative', flex: '1 1 60%', minWidth: 0 }}>
         <span style={{
           position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
           color: 'var(--text-secondary)', fontSize: 15, pointerEvents: 'none',
         }}>
           +{callingCode}
         </span>
+        {/* Fixed, generous padding rather than measuring callingCode length —
+            country calling codes are at most 3 digits, so this comfortably
+            fits all of them without a per-country width calculation. */}
         <input
           className="input"
           type="tel"
@@ -52,7 +64,7 @@ export default function PhoneInput({ country, onCountryChange, value, onChange, 
           value={value}
           onChange={e => onChange(e.target.value.replace(/[^\d\s]/g, ''))}
           autoFocus={autoFocus}
-          style={{ paddingLeft: 16 + callingCode.length * 9 + 12 }}
+          style={{ paddingLeft: 52, width: '100%' }}
         />
       </div>
     </div>
