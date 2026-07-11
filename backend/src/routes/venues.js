@@ -373,13 +373,13 @@ const VIBE_FILE_SUPPORTED_VERSIONS = ['1.0'];
 // act on (which field is missing, what version was expected, etc).
 function validateVibeFile(payload) {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
-    return 'Invalid JSON format — expected a vibe file object.';
+    return 'Invalid JSON format, expected a vibe file object.';
   }
   for (const field of VIBE_FILE_REQUIRED_FIELDS) {
     if (!(field in payload)) return `This file is missing required field '${field}'.`;
   }
   if (!VIBE_FILE_SUPPORTED_VERSIONS.includes(payload.schema_version)) {
-    return `Unsupported schema version — expected ${VIBE_FILE_SUPPORTED_VERSIONS.join(' or ')}, got '${payload.schema_version}'.`;
+    return `Unsupported schema version, expected ${VIBE_FILE_SUPPORTED_VERSIONS.join(' or ')}, got '${payload.schema_version}'.`;
   }
   if (!Array.isArray(payload.top_songs_alltime) || !Array.isArray(payload.top_songs_last_30_days)) {
     return `'top_songs_alltime' and 'top_songs_last_30_days' must be arrays.`;

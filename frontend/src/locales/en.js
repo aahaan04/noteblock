@@ -13,7 +13,7 @@ export default {
   anonymousCreditWarning: 'Credits will be lost when you close the browser.',
 
   // Phone + SMS OTP auth
-  phoneAuthNote: "Enter your phone number and we'll send you a 6-digit code by SMS — no password needed.",
+  phoneAuthNote: "Enter your phone number and we'll send you a 6-digit code by SMS. No password needed.",
   sendCode: 'Send Code',
   sendingCode: 'Sending…',
   otpSentTo: 'We sent a 6-digit code to',

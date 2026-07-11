@@ -60,7 +60,7 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
     const { error: linkAuthErr } = await supabaseAdmin.auth.admin.updateUserById(req.user.id, { phone: phone_number, phone_confirm: true });
     if (linkAuthErr) {
       console.error('[auth/otp/verify link-auth]', `code=${linkAuthErr.code}`, `status=${linkAuthErr.status}`, linkAuthErr.message);
-      return res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: 'Internal server error', stage: 'link-auth', detail: linkAuthErr.message });
     }
     const { data, error } = await supabaseAdmin
       .from('users')
@@ -71,7 +71,7 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
     if (error) {
       console.error('[auth/otp/verify link]', `code=${error.code}`, error.message, error.details ?? '');
       if (error.code === '23505') return res.status(409).json({ error: PHONE_TAKEN_MSG });
-      return res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: 'Internal server error', stage: 'link', detail: error.message });
     }
     return res.json({ linked: true, profile: data });
   }
@@ -91,7 +91,16 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
     });
     if (createErr || !created?.user) {
       console.error('[auth/otp/verify create]', `code=${createErr?.code}`, `status=${createErr?.status}`, createErr?.message);
-      return res.status(500).json({ error: 'Internal server error' });
+      // Twilio's own account had already verified this code once before if
+      // a prior attempt got this far but failed on a later step (see the
+      // cleanup below) — but if that compensating delete itself ever failed,
+      // this is the resulting symptom: every retry hits "phone already
+      // registered" forever. Surface that distinctly so it's diagnosable
+      // from the client error alone, not just server logs.
+      if (createErr?.code === 'phone_exists' || createErr?.status === 422) {
+        return res.status(409).json({ error: PHONE_TAKEN_MSG });
+      }
+      return res.status(500).json({ error: 'Internal server error', stage: 'create', detail: createErr?.message });
     }
     userId = created.user.id;
     isNewUser = true;
@@ -102,8 +111,13 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
       .eq('id', userId);
     if (updateErr) {
       console.error('[auth/otp/verify create-link]', `code=${updateErr.code}`, updateErr.message, updateErr.details ?? '');
+      // Compensate: don't leave an orphaned auth user behind holding this
+      // phone number hostage — every retry would otherwise fail forever
+      // with "phone already registered" since createUser above can never
+      // succeed again for the same number.
+      await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => {});
       if (updateErr.code === '23505') return res.status(409).json({ error: PHONE_TAKEN_MSG });
-      return res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: 'Internal server error', stage: 'create-link', detail: updateErr.message });
     }
   } else {
     // Existing phone-native user re-verifying — keep auth.users.phone in
@@ -123,7 +137,11 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
   const { error: pwErr } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: tempPassword });
   if (pwErr) {
     console.error('[auth/otp/verify password]', `code=${pwErr.code}`, `status=${pwErr.status}`, pwErr.message);
-    return res.status(500).json({ error: 'Internal server error' });
+    // Same compensation as above — only for accounts we just created this
+    // request. An existing account that transiently fails here should stay
+    // intact; the user just retries and re-enters this same branch again.
+    if (isNewUser) await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => {});
+    return res.status(500).json({ error: 'Internal server error', stage: 'password', detail: pwErr.message });
   }
   const { data: signInData, error: signInErr } = await supabasePublic.auth.signInWithPassword({
     phone: phone_number,
@@ -131,7 +149,8 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
   });
   if (signInErr || !signInData?.session) {
     console.error('[auth/otp/verify signin]', `code=${signInErr?.code}`, `status=${signInErr?.status}`, signInErr?.message);
-    return res.status(500).json({ error: 'Internal server error' });
+    if (isNewUser) await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => {});
+    return res.status(500).json({ error: 'Internal server error', stage: 'signin', detail: signInErr?.message });
   }
 
   res.json({

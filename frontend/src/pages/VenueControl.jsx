@@ -759,7 +759,7 @@ function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePla
       try {
         parsed = JSON.parse(text);
       } catch {
-        setUploadError('Invalid JSON format — could not parse this file.');
+        setUploadError('Invalid JSON format. Could not parse this file.');
         return;
       }
       await api.venues.uploadVibeFile(venueId, { filename: file.name, data: parsed }, token);
@@ -885,7 +885,7 @@ function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePla
                     {venue.uploaded_vibe_filename}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                    Uploaded {venue.uploaded_vibe_uploaded_at ? new Date(venue.uploaded_vibe_uploaded_at).toLocaleDateString() : '—'}
+                    Uploaded {venue.uploaded_vibe_uploaded_at ? new Date(venue.uploaded_vibe_uploaded_at).toLocaleDateString() : 'recently'}
                   </div>
                 </div>
                 <button
@@ -916,7 +916,7 @@ function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePla
           <div style={{ marginTop: 16 }}>
             {vibeReady ? (
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                Using this venue's own request history — {requestsSoFar} requests so far
+                Using this venue's own request history, {requestsSoFar} requests so far
                 {vibeData?.top_songs_alltime?.[0]?.title && (
                   <>, top track: <strong style={{ color: 'var(--text-primary)' }}>{decode(vibeData.top_songs_alltime[0].title)}</strong></>
                 )}.
@@ -1384,7 +1384,7 @@ function UsersPanel({ venueId, token }) {
             <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-secondary)' }}>To: <strong style={{ color: 'var(--text-primary)' }}>{modal.user.name}</strong></p>
             {!modal.user.isRegistered && (
               <p style={{ margin: '0 0 12px', fontSize: 11, color: '#C89B6E', display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(200,155,110,0.08)', border: '1px solid rgba(200,155,110,0.2)', borderRadius: 7, padding: '8px 10px' }}>
-                <AlertTriangle size={11} /> This user appears to be a guest. Gifted credits only land in accounts — ask them to sign in first if they want to receive them.
+                <AlertTriangle size={11} /> This user appears to be a guest. Gifted credits only land in accounts, ask them to sign in first if they want to receive them.
               </p>
             )}
             {/* Quick presets */}

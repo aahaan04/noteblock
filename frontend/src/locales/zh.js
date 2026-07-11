@@ -13,7 +13,7 @@ export default {
   anonymousCreditWarning: '关闭浏览器后积分将丢失。',
 
   // Phone + SMS OTP auth
-  phoneAuthNote: '输入您的手机号码，我们将通过短信发送 6 位验证码 — 无需密码。',
+  phoneAuthNote: '输入您的手机号码，我们将通过短信发送 6 位验证码。无需密码。',
   sendCode: '发送验证码',
   sendingCode: '发送中…',
   otpSentTo: '我们已发送 6 位验证码至',
