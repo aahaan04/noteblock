@@ -57,7 +57,11 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
       .from('users').select('id').eq('phone_number', phone_number).neq('id', req.user.id).maybeSingle();
     if (conflict) return res.status(409).json({ error: PHONE_TAKEN_MSG });
 
-    await supabaseAdmin.auth.admin.updateUserById(req.user.id, { phone: phone_number, phone_confirm: true });
+    const { error: linkAuthErr } = await supabaseAdmin.auth.admin.updateUserById(req.user.id, { phone: phone_number, phone_confirm: true });
+    if (linkAuthErr) {
+      console.error('[auth/otp/verify link-auth]', `code=${linkAuthErr.code}`, `status=${linkAuthErr.status}`, linkAuthErr.message);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
     const { data, error } = await supabaseAdmin
       .from('users')
       .update({ phone_number, phone_verified: true })
@@ -65,7 +69,7 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
       .select()
       .single();
     if (error) {
-      console.error('[auth/otp/verify link]', error.message);
+      console.error('[auth/otp/verify link]', `code=${error.code}`, error.message, error.details ?? '');
       if (error.code === '23505') return res.status(409).json({ error: PHONE_TAKEN_MSG });
       return res.status(500).json({ error: 'Internal server error' });
     }
@@ -86,7 +90,7 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
       user_metadata: { role: role === 'host' ? 'host' : 'guest' },
     });
     if (createErr || !created?.user) {
-      console.error('[auth/otp/verify create]', createErr?.message);
+      console.error('[auth/otp/verify create]', `code=${createErr?.code}`, `status=${createErr?.status}`, createErr?.message);
       return res.status(500).json({ error: 'Internal server error' });
     }
     userId = created.user.id;
@@ -97,7 +101,7 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
       .update({ phone_number, phone_verified: true })
       .eq('id', userId);
     if (updateErr) {
-      console.error('[auth/otp/verify create-link]', updateErr.message);
+      console.error('[auth/otp/verify create-link]', `code=${updateErr.code}`, updateErr.message, updateErr.details ?? '');
       if (updateErr.code === '23505') return res.status(409).json({ error: PHONE_TAKEN_MSG });
       return res.status(500).json({ error: 'Internal server error' });
     }
@@ -118,7 +122,7 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
   const tempPassword = crypto.randomBytes(32).toString('hex');
   const { error: pwErr } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: tempPassword });
   if (pwErr) {
-    console.error('[auth/otp/verify password]', pwErr.message);
+    console.error('[auth/otp/verify password]', `code=${pwErr.code}`, `status=${pwErr.status}`, pwErr.message);
     return res.status(500).json({ error: 'Internal server error' });
   }
   const { data: signInData, error: signInErr } = await supabasePublic.auth.signInWithPassword({
@@ -126,7 +130,7 @@ router.post('/otp/verify', optionalAuth, otpVerifyLimiter, body(schemas.otpVerif
     password: tempPassword,
   });
   if (signInErr || !signInData?.session) {
-    console.error('[auth/otp/verify signin]', signInErr?.message);
+    console.error('[auth/otp/verify signin]', `code=${signInErr?.code}`, `status=${signInErr?.status}`, signInErr?.message);
     return res.status(500).json({ error: 'Internal server error' });
   }
 
