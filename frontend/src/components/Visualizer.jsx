@@ -87,15 +87,35 @@ const MIC_SUPPORTED = typeof navigator !== 'undefined'
 
 const MIC_GRANTED_KEY = 'nb_mic_granted';
 
-// Average of one bucket of a mic frequency array, normalised to 0..1 — lets
-// every draw function resample the analyser's bin count down to however many
-// discrete elements (bars, dots, rings) that style actually has.
+// Resamples one element's worth of a mic frequency array down to a single
+// 0..1 value, for however many discrete elements (bars, dots) that style
+// actually has. Two things a naive equal-width linear split gets wrong for
+// real program material:
+//  1. Most audible energy in a linear FFT sits in the first ~10-20% of
+//     bins (bass/low-mid) — dividing the bins into equal-width chunks gives
+//     every element the same *bin* budget but a wildly uneven *energy*
+//     budget, so elements mapped to high-frequency bins read near-silent
+//     almost all the time and look static even though there IS live signal.
+//  2. Averaging a bucket dilutes short transients (hi-hats, sibilance) that
+//     only hit one or two bins within it.
+// Fixed by mapping bar index -> bin range on a squared (log-ish) curve, so
+// low indices sample a narrow low-frequency slice and high indices sample a
+// proportionally wider high-frequency slice, using the bucket's peak
+// (not average) so transients survive, plus a gentle per-band gain curve
+// that compensates for the natural energy roll-off toward high frequencies
+// so every element — not just the bass-heavy left side — stays reactive.
 function micBucket(freqData, index, count) {
-  const bucketSize = Math.max(1, Math.floor(freqData.length / count));
-  const start = index * bucketSize;
-  let sum = 0;
-  for (let j = 0; j < bucketSize; j++) sum += freqData[start + j] || 0;
-  return (sum / bucketSize) / 255;
+  const n = freqData.length;
+  const t0 = index / count;
+  const t1 = (index + 1) / count;
+  const start = Math.floor(t0 * t0 * n);
+  const end = Math.min(n, Math.max(start + 1, Math.floor(t1 * t1 * n)));
+  let peak = 0;
+  for (let j = start; j < end; j++) {
+    if (freqData[j] > peak) peak = freqData[j];
+  }
+  const gain = 1 + t0 * 1.8;
+  return Math.min(1, (peak / 255) * gain);
 }
 
 // Overall (whole-spectrum) loudness, 0..1 — used by single-element styles
@@ -230,10 +250,16 @@ function drawRipple(ctx, w, h, phase, colorA, colorB, colorMode, micData) {
     const color = pickColor(colorMode, colorA, colorB, posT, intensity, phase);
     ctx.beginPath();
     ctx.arc(w / 2, h / 2, r, 0, Math.PI * 2);
-    ctx.strokeStyle = color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+    // color is an rgb()/hsl() string, not hex — can't append a hex alpha
+    // suffix to it (that produced an invalid CSS color, which canvas
+    // silently ignores, leaving strokeStyle stuck on a stale value and
+    // making rings invisible). globalAlpha works with any color format.
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
     ctx.lineWidth = 2;
     ctx.stroke();
   }
+  ctx.globalAlpha = 1;
 }
 
 function drawOrbit(ctx, w, h, phase, colorA, colorB, glow, colorMode, micData) {
@@ -571,10 +597,12 @@ export default function Visualizer({ isPlaying, songTitle, requester, settings: 
               </div>
             )}
           </div>
-          <button onClick={() => setModalOpen(o => !o)} style={ctrlBtnStyle}
-            onMouseEnter={ctrlBtnHover} onMouseLeave={ctrlBtnLeave} title={modalOpen ? 'Close expanded view' : 'Expand view'}>
-            <Expand size={14} />
-          </button>
+          {!modalOpen && (
+            <button onClick={() => setModalOpen(true)} style={ctrlBtnStyle}
+              onMouseEnter={ctrlBtnHover} onMouseLeave={ctrlBtnLeave} title="Expand view">
+              <Expand size={14} />
+            </button>
+          )}
           <button onClick={toggleFullscreen} style={ctrlBtnStyle}
             onMouseEnter={ctrlBtnHover} onMouseLeave={ctrlBtnLeave} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
             {fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
