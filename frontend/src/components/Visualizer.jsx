@@ -4,15 +4,72 @@ import { Maximize2, Minimize2, Expand, Mic, MicOff, SlidersHorizontal, X, Save, 
 const STYLES = ['bars', 'wave', 'pulse', 'ripple', 'orbit', 'spectrum'];
 const STYLE_LABELS = { bars: 'Bars', wave: 'Wave', pulse: 'Pulse', ripple: 'Ripple', orbit: 'Orbit', spectrum: 'Spectrum' };
 
-const THEMES = [
-  { id: 'ember', label: 'Ember', a: '#FF6B35', b: '#6B4226' },
-  { id: 'neon', label: 'Neon', a: '#00FF94', b: '#00B4D8' },
-  { id: 'gold', label: 'Gold', a: '#FFD700', b: '#C89B6E' },
-  { id: 'candy', label: 'Candy', a: '#FF6EB4', b: '#A855F7' },
-  { id: 'ice', label: 'Ice', a: '#7DD3FC', b: '#818CF8' },
-  { id: 'mono', label: 'Mono', a: '#F0E6D3', b: '#F0E6D3' },
-  { id: 'multicolor', label: 'Multicolor', a: '#FF6B35', b: '#FFD700' },
+// ── Color section data ───────────────────────────────────────────────────
+// Three groups: SOLID (flat, colorA === colorB), GRADIENT (static two-stop,
+// colorA -> colorB), DYNAMIC (colorMode itself picks the color per-frame —
+// colorA/colorB are unused by rendering for these, only kept for a sane
+// swatch preview / migration fallback).
+const SOLID_COLORS = [
+  { id: 'orange', label: 'Orange', hex: '#FF6B35' },
+  { id: 'teal', label: 'Teal', hex: '#14B8A6' },
+  { id: 'gold', label: 'Gold', hex: '#FFD700' },
+  { id: 'pink', label: 'Pink', hex: '#FF6EB4' },
+  { id: 'blue', label: 'Blue', hex: '#3B82F6' },
+  { id: 'cream', label: 'Cream', hex: '#F0E6D3' },
+  { id: 'purple', label: 'Purple', hex: '#A855F7' },
+  { id: 'red', label: 'Red', hex: '#EF4444' },
 ];
+
+const GRADIENTS = [
+  { id: 'sunset', label: 'Sunset', a: '#FF6B35', b: '#FF6EB4' },
+  { id: 'ocean', label: 'Ocean', a: '#14B8A6', b: '#3B82F6' },
+  { id: 'fire', label: 'Fire', a: '#FFD700', b: '#EF4444' },
+  { id: 'candy', label: 'Candy', a: '#FF6EB4', b: '#A855F7' },
+  { id: 'aurora', label: 'Aurora', a: '#00FF94', b: '#3B82F6' },
+  { id: 'gold-gradient', label: 'Gold', a: '#FFD700', b: '#C05621' },
+];
+
+const DYNAMIC_COLORS = [
+  { id: 'intensity', label: 'Intensity Shift', colorMode: 'intensity' },
+  { id: 'rainbow', label: 'Rainbow Cycle', colorMode: 'rainbow' },
+  { id: 'pulse-spectrum', label: 'Pulse Spectrum', colorMode: 'pulse-spectrum' },
+];
+
+// Swatch previews for the dynamic options, matching how each actually
+// renders: Intensity Shift is the real orange/red/gold ramp it produces;
+// Rainbow Cycle is a full conic wheel (loops continuously); Pulse Spectrum
+// is a linear sweep (a range driven by intensity, not a full loop).
+const DYNAMIC_SWATCH_BG = {
+  intensity: 'conic-gradient(from 0deg, #FF6B35, #FF3B5C, #FFD700, #FF6B35)',
+  rainbow: 'conic-gradient(from 0deg, hsl(0,75%,58%), hsl(60,75%,58%), hsl(120,75%,58%), hsl(180,75%,58%), hsl(240,75%,58%), hsl(300,75%,58%), hsl(360,75%,58%))',
+  'pulse-spectrum': 'linear-gradient(135deg, hsl(0,80%,55%), hsl(150,80%,55%), hsl(300,80%,55%))',
+};
+
+// Maps the old 7-theme flat list (colorMode: 'fixed' | 'multicolor') to the
+// new SOLID / GRADIENT / DYNAMIC shape, so a venue that saved a preference
+// under the old system keeps working and lands on the closest equivalent —
+// nothing resets to a default just because the categories were reorganised.
+const LEGACY_THEME_MAP = {
+  ember: { colorMode: 'solid', colorId: 'orange', colorA: '#FF6B35', colorB: '#FF6B35' },
+  neon: { colorMode: 'gradient', colorId: 'aurora', colorA: '#00FF94', colorB: '#3B82F6' },
+  gold: { colorMode: 'solid', colorId: 'gold', colorA: '#FFD700', colorB: '#FFD700' },
+  candy: { colorMode: 'gradient', colorId: 'candy', colorA: '#FF6EB4', colorB: '#A855F7' },
+  ice: { colorMode: 'solid', colorId: 'blue', colorA: '#3B82F6', colorB: '#3B82F6' },
+  mono: { colorMode: 'solid', colorId: 'cream', colorA: '#F0E6D3', colorB: '#F0E6D3' },
+  multicolor: { colorMode: 'intensity', colorId: 'intensity', colorA: '#FF6B35', colorB: '#FFD700' },
+};
+
+// Normalises a settings object that might still be in the old flat-theme
+// shape (colorMode 'fixed'/'multicolor' + themeId) into the new shape. A
+// settings object already in the new shape (colorMode is one of solid/
+// gradient/intensity/rainbow/pulse-spectrum) passes through untouched.
+function migrateColorSettings(raw) {
+  if (!raw) return raw;
+  if (raw.colorMode !== 'fixed' && raw.colorMode !== 'multicolor') return raw;
+  const mapped = LEGACY_THEME_MAP[raw.themeId] ?? LEGACY_THEME_MAP.ember;
+  const { themeId, ...rest } = raw; // eslint-disable-line no-unused-vars
+  return { ...rest, ...mapped };
+}
 
 const BG_OPTIONS = [
   { id: 'dark', label: 'Dark', style: { background: '#120C06' } },
@@ -73,6 +130,34 @@ function intensityColor(t) {
     : lerpColor('#FF3B5C', '#FFD700', (c - 0.5) / 0.5);
 }
 
+// Rainbow Cycle: hue depends on time (phase) and each element's position
+// (posT), so the whole visualizer sweeps continuously through the spectrum
+// regardless of music intensity — a per-element offset keeps multi-element
+// styles (bars, dots) visually rich rather than one flat color at a time.
+function rainbowColor(phase, posT) {
+  const hue = ((phase * 30) + posT * 360) % 360;
+  return `hsl(${hue}, 75%, 58%)`;
+}
+
+// Pulse Spectrum: like Intensity Shift, but the intensity value sweeps a
+// full hue range (red -> magenta) instead of the fixed orange/red/gold ramp
+// — quiet moments sit near red, loud moments push toward magenta.
+function pulseSpectrumColor(t) {
+  const c = Math.max(0, Math.min(1, t));
+  return `hsl(${c * 300}, 80%, 55%)`;
+}
+
+// Single dispatch point every draw function's element-coloring goes
+// through. Dynamic modes compute their own color; solid and gradient both
+// resolve through the same lerpColor(colorA, colorB, posT) — solid just has
+// colorA === colorB, so the result is flat regardless of posT.
+function pickColor(colorMode, colorA, colorB, posT, intensity, phase) {
+  if (colorMode === 'intensity') return intensityColor(intensity);
+  if (colorMode === 'rainbow') return rainbowColor(phase, posT);
+  if (colorMode === 'pulse-spectrum') return pulseSpectrumColor(intensity);
+  return lerpColor(colorA, colorB, posT);
+}
+
 function drawBars(ctx, w, h, phase, bars, colorA, colorB, glow, colorMode, micData) {
   ctx.clearRect(0, 0, w, h);
   const barW = w / bars * 0.7;
@@ -81,7 +166,7 @@ function drawBars(ctx, w, h, phase, bars, colorA, colorB, glow, colorMode, micDa
     const t = (i / bars);
     const sim = Math.abs(Math.sin(phase * 2.3 + i * 0.4 + Math.sin(i * 0.7) * 0.5));
     const intensity = micData ? micBucket(micData, i, bars) : sim;
-    const color = colorMode === 'multicolor' ? intensityColor(intensity) : lerpColor(colorA, colorB, t);
+    const color = pickColor(colorMode, colorA, colorB, t, intensity, phase);
     const bh = h * 0.2 + h * 0.6 * intensity;
     const x = i * (barW + gap) + gap / 2;
     if (glow !== 'none') ctx.shadowBlur = glow === 'strong' ? 12 : 5;
@@ -107,7 +192,7 @@ function drawWave(ctx, w, h, phase, colorA, colorB, glow, colorMode, micData) {
   }
   const simIntensity = Math.abs(Math.sin(phase * 1.1));
   const intensity = overall != null ? overall : simIntensity;
-  const color = colorMode === 'multicolor' ? intensityColor(intensity) : lerpColor(colorA, colorB, 0.5);
+  const color = pickColor(colorMode, colorA, colorB, 0.5, intensity, phase);
   if (glow !== 'none') { ctx.shadowBlur = glow === 'strong' ? 16 : 6; ctx.shadowColor = color; }
   ctx.strokeStyle = color;
   ctx.lineWidth = 2.5;
@@ -123,7 +208,7 @@ function drawPulse(ctx, w, h, phase, colorA, colorB, glow, colorMode, micData) {
     ? Math.min(w, h) * 0.22 + Math.min(w, h) * 0.18 * micIntensity
     : Math.min(w, h) * 0.25 + Math.min(w, h) * 0.12 * simR;
   const intensity = micIntensity != null ? micIntensity : Math.abs(simR);
-  const color = colorMode === 'multicolor' ? intensityColor(intensity) : lerpColor(colorA, colorB, 0.5);
+  const color = pickColor(colorMode, colorA, colorB, 0.5, intensity, phase);
   if (glow !== 'none') { ctx.shadowBlur = glow === 'strong' ? 24 : 10; ctx.shadowColor = color; }
   ctx.beginPath();
   ctx.arc(w / 2, h / 2, r, 0, Math.PI * 2);
@@ -142,7 +227,7 @@ function drawRipple(ctx, w, h, phase, colorA, colorB, colorMode, micData) {
     const alpha = 1 - r / maxR;
     const posT = r / maxR;
     const intensity = overall != null ? overall : posT;
-    const color = colorMode === 'multicolor' ? intensityColor(intensity) : lerpColor(colorA, colorB, posT);
+    const color = pickColor(colorMode, colorA, colorB, posT, intensity, phase);
     ctx.beginPath();
     ctx.arc(w / 2, h / 2, r, 0, Math.PI * 2);
     ctx.strokeStyle = color + Math.round(alpha * 255).toString(16).padStart(2, '0');
@@ -163,7 +248,7 @@ function drawOrbit(ctx, w, h, phase, colorA, colorB, glow, colorMode, micData) {
     const posT = i / dotCount;
     const sim = Math.abs(Math.sin(phase * 2 + i));
     const intensity = micData ? micBucket(micData, i, dotCount) : sim;
-    const color = colorMode === 'multicolor' ? intensityColor(intensity) : lerpColor(colorA, colorB, posT);
+    const color = pickColor(colorMode, colorA, colorB, posT, intensity, phase);
     const dotR = micData ? 3 + intensity * 6 : 5;
     if (glow !== 'none') { ctx.shadowBlur = glow === 'strong' ? 12 : 5; ctx.shadowColor = color; }
     ctx.beginPath();
@@ -183,7 +268,7 @@ function drawSpectrum(ctx, w, h, phase, bars, colorA, colorB, glow, colorMode, m
     const t = i / bars;
     const sim = Math.abs(Math.sin(phase * 2.3 + i * 0.4));
     const intensity = micData ? micBucket(micData, i, bars) : sim;
-    const color = colorMode === 'multicolor' ? intensityColor(intensity) : lerpColor(colorA, colorB, t);
+    const color = pickColor(colorMode, colorA, colorB, t, intensity, phase);
     const bh = (h * 0.15 + h * 0.3 * intensity);
     const x = i * (barW + gap) + gap / 2;
     if (glow !== 'none') { ctx.shadowBlur = glow === 'strong' ? 10 : 4; ctx.shadowColor = color; }
@@ -250,15 +335,15 @@ export default function Visualizer({ isPlaying, songTitle, requester, settings: 
 
   const [settings, setSettings] = useState({
     style: 'bars',
-    themeId: 'ember',
+    colorMode: 'solid',
+    colorId: 'orange',
     colorA: '#FF6B35',
-    colorB: '#6B4226',
+    colorB: '#FF6B35',
     speed: 'medium',
     barCount: 48,
     bg: 'dark',
     glow: 'subtle',
-    colorMode: 'fixed',
-    ...externalSettings,
+    ...migrateColorSettings(externalSettings),
   });
 
   const [panelOpen, setPanelOpen] = useState(false);
@@ -277,7 +362,7 @@ export default function Visualizer({ isPlaying, songTitle, requester, settings: 
   const micDataArrayRef = useRef(null);
 
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
-  useEffect(() => { if (externalSettings) setSettings(s => ({ ...s, ...externalSettings })); }, [JSON.stringify(externalSettings)]); // eslint-disable-line
+  useEffect(() => { if (externalSettings) setSettings(s => ({ ...s, ...migrateColorSettings(externalSettings) })); }, [JSON.stringify(externalSettings)]); // eslint-disable-line
 
   const speedFactor = settings.speed === 'fast' ? 3 : settings.speed === 'slow' ? 0.4 : 1;
 
@@ -523,17 +608,48 @@ export default function Visualizer({ isPlaying, songTitle, requester, settings: 
             </div>
 
             <SectionLabel>Color</SectionLabel>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-              {THEMES.map(th => (
-                <button key={th.id}
-                  onClick={() => setSettings(p => ({ ...p, themeId: th.id, colorA: th.a, colorB: th.b, colorMode: th.id === 'multicolor' ? 'multicolor' : 'fixed' }))}
-                  title={th.label} style={{ width: 28, height: 28, borderRadius: '50%',
-                    background: th.id === 'multicolor'
-                      ? 'conic-gradient(from 0deg, #FF6B35, #FF3B5C, #FFD700, #FF6B35)'
-                      : `linear-gradient(135deg, ${th.a}, ${th.b})`,
-                    border: settings.themeId === th.id ? '2.5px solid #fff' : '2px solid transparent',
-                    cursor: 'pointer' }} />
-              ))}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 14 }}>
+                <SubLabel>Solid</SubLabel>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {SOLID_COLORS.map(c => (
+                    <button key={c.id}
+                      onClick={() => setSettings(p => ({ ...p, colorMode: 'solid', colorId: c.id, colorA: c.hex, colorB: c.hex }))}
+                      title={c.label} style={{ width: 28, height: 28, borderRadius: '50%',
+                        background: c.hex,
+                        border: settings.colorId === c.id ? '2.5px solid #fff' : '2px solid transparent',
+                        cursor: 'pointer' }} />
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <SubLabel>Gradient</SubLabel>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {GRADIENTS.map(g => (
+                    <button key={g.id}
+                      onClick={() => setSettings(p => ({ ...p, colorMode: 'gradient', colorId: g.id, colorA: g.a, colorB: g.b }))}
+                      title={g.label} style={{ width: 28, height: 28, borderRadius: '50%',
+                        background: `linear-gradient(135deg, ${g.a}, ${g.b})`,
+                        border: settings.colorId === g.id ? '2.5px solid #fff' : '2px solid transparent',
+                        cursor: 'pointer' }} />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <SubLabel>Dynamic</SubLabel>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {DYNAMIC_COLORS.map(d => (
+                    <button key={d.id}
+                      onClick={() => setSettings(p => ({ ...p, colorMode: d.colorMode, colorId: d.id, colorA: '#FF6B35', colorB: '#FFD700' }))}
+                      title={d.label} style={{ width: 28, height: 28, borderRadius: '50%',
+                        background: DYNAMIC_SWATCH_BG[d.id],
+                        border: settings.colorId === d.id ? '2.5px solid #fff' : '2px solid transparent',
+                        cursor: 'pointer' }} />
+                  ))}
+                </div>
+              </div>
             </div>
 
             <SectionLabel>Speed</SectionLabel>
@@ -601,5 +717,15 @@ function SectionLabel({ children }) {
     <div style={{ fontSize: 10, color: '#5A4535', fontWeight: 600, letterSpacing: 2,
       textTransform: 'uppercase', marginBottom: 8, paddingBottom: 4,
       borderBottom: '1px solid #2A1F17' }}>{children}</div>
+  );
+}
+
+// Smaller sub-heading nested inside a SectionLabel'd block (e.g. the three
+// color subgroups) — same muted uppercase treatment, no border so it reads
+// as a level below the section label rather than a sibling section.
+function SubLabel({ children }) {
+  return (
+    <div style={{ fontSize: 9, color: '#5A4535', fontWeight: 700, letterSpacing: 1.2,
+      textTransform: 'uppercase', marginBottom: 8 }}>{children}</div>
   );
 }
