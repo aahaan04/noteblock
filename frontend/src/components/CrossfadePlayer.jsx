@@ -65,6 +65,8 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   // Stores an entry to start as soon as the players finish initialising
   // (used by resumeFromSaved when called before YouTube API is ready)
   const pendingResumeRef = useRef(null);
+  // Set when a resume lands before the players are ready — onReady picks it up
+  const pendingStartRef = useRef(false);
 
   const S = useRef({
     active: 'A', crossfading: false, mode: 'idle',
@@ -261,13 +263,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   useImperativeHandle(ref, () => ({
     start() {
       if (!initialized.current || S.current.mode !== 'idle') return;
-      audioUnlocked.current = true;
-      startSilentLoop();
-      acquireWakeLock();
-      const req = getNextRequested();
-      if (req)  { startEntry(req);  return; }
-      const vibe = getNextVibe(null);
-      if (vibe) startEntry(vibe);
+      beginPlayback();
     },
     skip() {
       if (S.current.crossfading) return;
@@ -346,18 +342,56 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     }, stepMs);
   }
 
+  // Previous jukeboxPaused value, so a genuine pause -> resume transition can
+  // be told apart from this effect's ordinary run on mount. Without that
+  // distinction the "resume while idle" branch below would auto-start
+  // playback on every page load, with no user gesture behind it.
+  const prevPausedRef = useRef(jukeboxPaused);
+
+  // Begins playback from a standing start (queue first, then vibe). Shared by
+  // the imperative start() and by resuming out of a paused-and-idle state.
+  function beginPlayback() {
+    audioUnlocked.current = true;
+    startSilentLoop();
+    acquireWakeLock();
+    const req = getNextRequested();
+    if (req) { startEntry(req); return; }
+    const vibe = getNextVibe(null);
+    if (vibe) startEntry(vibe);
+  }
+
   useEffect(() => {
-    if (!initialized.current || !audioUnlocked.current) return;
+    const wasPaused = prevPausedRef.current;
+    prevPausedRef.current = jukeboxPaused;
+
     if (jukeboxPaused) {
+      if (!initialized.current || !audioUnlocked.current) return; // nothing playing to fade out
       clearInterval(pauseFadeRef.current);
       fadeOutAndPause(1500);
       wasPlayingRef.current = false;
       releaseWakeLock(); // no background work needed while paused
-    } else if (S.current.mode !== 'idle') {
-      clearInterval(pauseFadeRef.current);
+      return;
+    }
+
+    // Only react to an actual paused -> resumed transition.
+    if (!wasPaused) return;
+
+    // Players not up yet (host hit Resume before the YouTube API finished
+    // loading) — hand off to onReady rather than dropping the resume.
+    if (!initialized.current) { pendingStartRef.current = true; return; }
+
+    clearInterval(pauseFadeRef.current);
+    if (S.current.mode !== 'idle') {
       fadeInOnResume(800);
       wasPlayingRef.current = true;
       acquireWakeLock(); // signal active playback to the browser
+    } else {
+      // Idle at resume time means the player remounted while the venue was
+      // still paused in the DB (page reload, or a mobile tab the OS killed).
+      // The Start button is hidden whenever the venue is paused, so Resume is
+      // the only control the host has — it has to actually begin playback
+      // here, otherwise the click appears to do nothing at all.
+      beginPlayback();
     }
   }, [jukeboxPaused]); // eslint-disable-line
 
@@ -476,6 +510,10 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
             if (elapsed > 2) {
               setTimeout(() => { try { getActive()?.seekTo(elapsed, true); } catch {} }, 2500);
             }
+          } else if (pendingStartRef.current) {
+            // Host hit Resume while the players were still loading.
+            pendingStartRef.current = false;
+            if (S.current.mode === 'idle') beginPlayback();
           }
           pollRef.current = setInterval(() => {
             if (!audioUnlocked.current || S.current.crossfading || S.current.mode === 'idle') return;
