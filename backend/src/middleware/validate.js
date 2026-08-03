@@ -5,7 +5,12 @@ export function body(schema) {
   return (req, res, next) => {
     const result = schema.safeParse(req.body);
     if (!result.success) {
-      const first = result.error.errors[0];
+      // zod v4 renamed ZodError.errors -> .issues; the old name silently
+      // throws (Cannot read properties of undefined) instead of returning
+      // the intended 400, which Express's synchronous-throw handling then
+      // turns into a generic 500 — every validation failure app-wide was
+      // returning the wrong status with no useful message.
+      const first = result.error.issues[0];
       const field = first.path.join('.') || 'body';
       return res.status(400).json({ error: `${field}: ${first.message}` });
     }
@@ -60,12 +65,14 @@ export const schemas = {
   // POST /api/venues/:id/gift
   gift: z.object({
     guest_identifier: safeName(100),
+    guest_user_id: z.string().uuid().optional(),
     amount: z.number().int().min(1).max(10000),
   }),
 
   // POST /api/venues/:id/banned-users
   banUser: z.object({
     requester_name: safeName(80),
+    user_id: z.string().uuid().optional(),
   }),
 
   // POST /api/venues/:venueId/queue

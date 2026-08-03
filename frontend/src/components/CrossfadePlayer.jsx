@@ -42,7 +42,7 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
 const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   { queue, vibeVideos, vibeEnabled, crossfadeSecs = 5, jukeboxPaused = false,
     vibePlayedIds = [], onMarkPlaying, onMarkPlayed, onNowPlaying, onVibeActive, onVibePlayed,
-    venueId },
+    onVibeHistoryReset, venueId },
   ref
 ) {
   const [ytReady,       setYtReady]       = useState(false);
@@ -79,7 +79,28 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   useEffect(() => { S.current.vibeVideos   = vibeVideos;  }, [vibeVideos]);
   useEffect(() => { S.current.vibeEnabled  = vibeEnabled; }, [vibeEnabled]);
   useEffect(() => { S.current.crossfadeSecs = crossfadeSecs; }, [crossfadeSecs]);
-  useEffect(() => { S.current.vibePlayedIds = new Set(vibePlayedIds); }, [vibePlayedIds]);
+  // vibePlayedIds is marked played LOCALLY and synchronously the instant a
+  // vibe song finishes (see the onVibePlayed call sites below) so the "what
+  // plays after this" decision is never subject to the round-trip delay of
+  // the parent's own state update landing back down as this prop — a
+  // destructive replace here on every prop change would periodically clobber
+  // that local tracking back to a stale value. So this only ever MERGES
+  // (union) new ids in, EXCEPT when the incoming array is smaller than what's
+  // already tracked locally, which only happens for a genuine external reset
+  // (the host's manual "Reset Vibe History" button, which this component has
+  // no local trigger for) — the wrap-around reset below already clears
+  // S.current.vibePlayedIds directly and tells the parent via
+  // onVibeHistoryReset in the same tick, so by the time that round-trips
+  // back down here the two are already consistent and this is a no-op either
+  // way. A plain union-merge still correctly hydrates from persisted history
+  // on first mount (local starts empty).
+  useEffect(() => {
+    if (vibePlayedIds.length < S.current.vibePlayedIds.size) {
+      S.current.vibePlayedIds = new Set(vibePlayedIds);
+    } else {
+      for (const id of vibePlayedIds) S.current.vibePlayedIds.add(id);
+    }
+  }, [vibePlayedIds]);
 
   const getActive   = () => S.current.active === 'A' ? pA.current : pB.current;
   const getInactive = () => S.current.active === 'A' ? pB.current : pA.current;
@@ -104,8 +125,14 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     }
   }
 
-  function getNextRequested(excludeId = null) {
-    const pending = S.current.queue.filter(i => i.status === 'pending' && i.id !== excludeId);
+  // extraExcludeId exists for handleError: retiring a broken 'requested' item
+  // notifies the parent (onMarkPlayed), but that's an async prop round-trip —
+  // S.current.queue still shows it as 'pending' at the exact synchronous
+  // moment computeNext() runs right after, so without this it would just get
+  // cued again immediately, error again, in a tight loop until the parent's
+  // status update finally lands a render or two later.
+  function getNextRequested(excludeId = null, extraExcludeId = null) {
+    const pending = S.current.queue.filter(i => i.status === 'pending' && i.id !== excludeId && i.id !== extraExcludeId);
     if (!pending.length) return null;
     const item = pending.find(i => i.play_type === 'quick') ?? pending[0];
     return { type: 'requested', item, videoId: item.youtube_video_id, title: item.song_title };
@@ -114,11 +141,25 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   function getNextVibe(afterIdx = null) {
     const vids = S.current.vibeVideos;
     if (!S.current.vibeEnabled || !vids.length) return null;
+    // Only song in the pool — it's unavoidably its own successor, and none
+    // of the played-tracking below is meaningful for a pool of one.
+    if (vids.length === 1) {
+      return { type: 'vibe', videoId: vids[0].videoId, title: vids[0].title ?? 'Vibe', channel: vids[0].channel, vibeIdx: 0 };
+    }
 
     const played = S.current.vibePlayedIds;
     const startIdx = afterIdx !== null ? (afterIdx + 1) % vids.length : S.current.vibeIdx;
+    // When afterIdx is given, this is "what plays after the CURRENTLY
+    // playing song at afterIdx" — that song must never be offered as a
+    // candidate for its own successor. A full scan starting at startIdx
+    // wraps all the way back around to afterIdx itself as the last element,
+    // and since the current song hasn't finished yet it's correctly not in
+    // `played` — so without excluding it here explicitly, once every OTHER
+    // song in the pool has been played, the current song would still look
+    // "unplayed" and get queued to play again right after itself.
+    const count = afterIdx !== null ? vids.length - 1 : vids.length;
     const ordered = [];
-    for (let i = 0; i < vids.length; i++) {
+    for (let i = 0; i < count; i++) {
       ordered.push(vids[(startIdx + i) % vids.length]);
     }
 
@@ -129,15 +170,35 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       return { type: 'vibe', videoId: pick.videoId, title: pick.title ?? 'Vibe', channel: pick.channel, vibeIdx: idx };
     }
 
-    // All played — reset and start over
-    S.current.vibePlayedIds = new Set();
+    // A full lap just completed — reset and start over. Also tell the parent
+    // (onVibeHistoryReset), in the same tick, so its persisted history resets
+    // in lockstep rather than staying "every video, forever" while the local
+    // set here starts a fresh lap — see the vibePlayedIds prop-sync effect
+    // above for why that lockstep matters.
+    if (played.size > 0) {
+      played.clear();
+      onVibeHistoryReset?.();
+    }
     const pick = ordered[0];
     const idx = vids.indexOf(pick);
     return { type: 'vibe', videoId: pick.videoId, title: pick.title ?? 'Vibe', channel: pick.channel, vibeIdx: idx };
   }
 
-  function computeNext(cur) {
-    const req = getNextRequested(cur?.item?.id ?? null);
+  // Marks a vibe video played LOCALLY and synchronously (so the very next
+  // computeNext() call in the same synchronous block — deciding what plays
+  // after whatever is starting right now — sees it), in addition to
+  // notifying the parent for persistence. Without the synchronous local
+  // update, that decision would run before the parent's own round-trip state
+  // update lands, meaning the just-finished song wouldn't yet be excluded
+  // from "unplayed" and could be picked to play again immediately after the
+  // very next song.
+  function markVibePlayed(videoId) {
+    S.current.vibePlayedIds.add(videoId);
+    onVibePlayed?.(videoId);
+  }
+
+  function computeNext(cur, extraExcludeId = null) {
+    const req = getNextRequested(cur?.item?.id ?? null, extraExcludeId);
     if (req) return req;
     if (cur?.type === 'vibe') return getNextVibe(cur.vibeIdx);
     return getNextVibe(null);
@@ -194,7 +255,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       setDisplayActive(newActive);
       const prev = S.current.current;
       if (prev?.type === 'requested') onMarkPlayed?.(prev.item.id);
-      if (prev?.type === 'vibe') onVibePlayed?.(prev.videoId);
+      if (prev?.type === 'vibe') markVibePlayed(prev.videoId);
       if (entry) {
         S.current.current = entry;
         S.current.mode    = entry.type;
@@ -222,7 +283,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     if (playerName !== S.current.active || S.current.crossfading) return;
     const prev = S.current.current;
     if (prev?.type === 'requested') onMarkPlayed?.(prev.item.id);
-    if (prev?.type === 'vibe') onVibePlayed?.(prev.videoId);
+    if (prev?.type === 'vibe') markVibePlayed(prev.videoId);
     const next = S.current.next ?? computeNext(prev);
     if (next) {
       const newActive = S.current.active === 'A' ? 'B' : 'A';
@@ -246,16 +307,49 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   }
 
   function handleError(playerName) {
-    if (playerName !== S.current.active) return;
-    const next = S.current.next ?? computeNext(S.current.current);
-    if (!next) return;
-    try { getActive()?.stopVideo(); } catch {}
-    const newActive = S.current.active === 'A' ? 'B' : 'A';
-    S.current.active = newActive; S.current.current = next; S.current.mode = next.type;
-    setDisplayActive(newActive);
-    try { const ap = newActive === 'A' ? pA.current : pB.current; ap?.loadVideoById(next.videoId); ap?.unMute(); ap?.setVolume(100); } catch {}
-    S.current.next = computeNext(next);
-    if (S.current.next) safeCue(getInactive(), S.current.next.videoId);
+    if (playerName === S.current.active) {
+      // The currently-playing video itself errored — skip to whatever was
+      // already lined up as next.
+      const next = S.current.next ?? computeNext(S.current.current);
+      if (!next) return;
+      try { getActive()?.stopVideo(); } catch {}
+      const newActive = S.current.active === 'A' ? 'B' : 'A';
+      S.current.active = newActive; S.current.current = next; S.current.mode = next.type;
+      if (next.type === 'vibe') S.current.vibeIdx = next.vibeIdx ?? 0;
+      if (next.type === 'requested') onMarkPlaying?.(next.item.id);
+      onNowPlaying?.(next); onVibeActive?.(next.type === 'vibe');
+      setDisplayActive(newActive);
+      try { const ap = newActive === 'A' ? pA.current : pB.current; ap?.loadVideoById(next.videoId); ap?.unMute(); ap?.setVolume(100); } catch {}
+      S.current.next = computeNext(next);
+      if (S.current.next) safeCue(getInactive(), S.current.next.videoId);
+      return;
+    }
+
+    // Error on the INACTIVE (pre-cued "next") player — whatever is
+    // currently playing is completely unaffected. This is exactly where a
+    // broken/region-locked video from the queue or vibe pool first surfaces
+    // (it gets cued as "next" before it's ever actually played), and this
+    // used to be ignored entirely (`playerName !== S.current.active` was
+    // true here, so the function just returned) — leaving the inactive
+    // player stuck on a video that will never load, which silently killed
+    // auto-advance the moment that song's turn came up, with no recovery
+    // short of the host noticing and hitting Skip.
+    const broken = S.current.next;
+    if (!broken) return;
+    // Retire it the same way a normal completion would, so a later
+    // computeNext() doesn't just pick the same broken entry again. For a
+    // vibe entry that's immediate (markVibePlayed updates S.current
+    // synchronously); for a requested item, onMarkPlayed only updates the
+    // parent's queue prop asynchronously, so also pass its id as an explicit
+    // exclusion for THIS call — otherwise S.current.queue still shows it as
+    // 'pending' right now and computeNext would cue the exact same broken
+    // video again immediately, erroring again in a tight loop until the
+    // parent's status update eventually lands a render or two later.
+    if (broken.type === 'requested') onMarkPlayed?.(broken.item.id);
+    if (broken.type === 'vibe') markVibePlayed(broken.videoId);
+    const next = computeNext(S.current.current, broken.type === 'requested' ? broken.item.id : null);
+    S.current.next = next;
+    if (next) safeCue(getInactive(), next.videoId);
   }
 
   // ── ref API ───────────────────────────────────────────────────────────────
@@ -274,7 +368,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       } else {
         try { getActive()?.stopVideo(); } catch {}
         if (prev?.type === 'requested') onMarkPlayed?.(prev.item.id);
-        if (prev?.type === 'vibe') onVibePlayed?.(prev.videoId);
+        if (prev?.type === 'vibe') markVibePlayed(prev.videoId);
         S.current.current = null; S.current.next = null; S.current.mode = 'idle';
         onNowPlaying?.(null); onVibeActive?.(false); setIsPlaying(false);
         wasPlayingRef.current = false;
@@ -569,7 +663,16 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       const req = getNextRequested();
       if (req) { doCrossfade(req); return; }
     }
-    if (mode === 'requested') {
+    // Guarded the same way as the 'vibe' branch above: while a crossfade is
+    // in flight, getInactive() IS the player currently fading in (loaded and
+    // playing the crossfade target), not a free player to re-cue. Without
+    // this guard, a new request arriving mid-fade (e.g. the last few seconds
+    // of a song, exactly when the poll interval starts a crossfade) would
+    // re-cue that fading-in player onto a different video, stranding it
+    // paused/cued when the fade "completes" — the poll loop's own
+    // getPlayerState() !== 1 guard then means nothing ever plays again until
+    // the host manually hits Skip.
+    if (mode === 'requested' && !S.current.crossfading) {
       const next = computeNext(S.current.current);
       if (next?.videoId !== S.current.next?.videoId) {
         S.current.next = next;

@@ -127,6 +127,8 @@ export default {
   noHistory: 'No requests yet',
   jukeboxOff: 'Jukebox is paused',
   jukeboxOffMsg: 'Song requests are closed right now. Check back soon!',
+  venueClosed: 'This room is closed',
+  venueClosedMsg: 'The host has closed this room. Song requests are not accepted right now.',
 
   // Common
   loading: 'Loading…',

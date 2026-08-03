@@ -2,11 +2,13 @@ import { Router } from 'express';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import { body, schemas } from '../middleware/validate.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
+import { welcomeLimiter } from '../middleware/rateLimits.js';
 
 const router = Router();
 
 // GET /api/users/profile
-router.get('/profile', requireAuth, async (req, res) => {
+router.get('/profile', requireAuth, asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('users')
     .select('*')
@@ -18,11 +20,11 @@ router.get('/profile', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
   res.json(data);
-});
+}));
 
 // PUT /api/users/profile
 // NOTE: 'role' is intentionally not accepted here — privilege escalation prevention.
-router.put('/profile', requireAuth, body(schemas.updateProfile), async (req, res) => {
+router.put('/profile', requireAuth, body(schemas.updateProfile), asyncHandler(async (req, res) => {
   const { display_name, language } = req.body;
   const updates = {};
   if (display_name !== undefined) updates.display_name = display_name;
@@ -44,10 +46,10 @@ router.put('/profile', requireAuth, body(schemas.updateProfile), async (req, res
     return res.status(500).json({ error: 'Internal server error' });
   }
   res.json(data);
-});
+}));
 
 // GET /api/users/saved-rooms — rooms this guest has visited
-router.get('/saved-rooms', requireAuth, async (req, res) => {
+router.get('/saved-rooms', requireAuth, asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('saved_rooms')
     .select('*, venue:venues(id, name, room_code, status)')
@@ -59,10 +61,14 @@ router.get('/saved-rooms', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
   res.json(data);
-});
+}));
 
-// POST /api/users/welcome/:venueId — grant welcome credits on first join
-router.post('/welcome/:venueId', requireAuth, async (req, res) => {
+// POST /api/users/welcome/:venueId — grant welcome credits on first join.
+// Rate limited per-account (not just globally) — otherwise a single account
+// could script "create N throwaway venues with max welcome_credits, call this
+// once per venue" for effectively uncapped credit farming, since nothing else
+// requires having genuinely joined that venue's room first.
+router.post('/welcome/:venueId', requireAuth, welcomeLimiter, asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin.rpc('grant_welcome_credits', {
     p_user_id: req.user.id,
     p_venue_id: req.params.venueId,
@@ -73,6 +79,6 @@ router.post('/welcome/:venueId', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
   res.json(data);
-});
+}));
 
 export default router;

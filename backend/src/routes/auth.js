@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { supabaseAdmin, supabasePublic } from '../lib/supabase.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { body, schemas } from '../middleware/validate.js';
-import { otpStartLimiter, otpVerifyLimiter } from '../middleware/rateLimits.js';
+import { otpStartLimiter, otpStartIpLimiter, otpVerifyLimiter } from '../middleware/rateLimits.js';
 import { startSmsVerification, checkSmsVerification } from '../lib/twilio.js';
 
 const router = Router();
@@ -14,9 +14,11 @@ const WRONG_CODE_MSG = 'That code is incorrect or has expired. Please try again.
 const PHONE_TAKEN_MSG = 'This phone number is already linked to a different account.';
 
 // POST /api/auth/otp/start — send a 6-digit code via SMS (Twilio Verify).
-// Rate limited per phone number, on top of the global per-IP limiter
-// already applied to all /api routes.
-router.post('/otp/start', otpStartLimiter, body(schemas.otpStart), async (req, res) => {
+// Rate limited per phone number AND per IP (otpStartIpLimiter catches one IP
+// spraying codes across many different numbers, which the phone-keyed limiter
+// alone can't see), on top of the global per-IP limiter applied to all /api
+// routes.
+router.post('/otp/start', otpStartIpLimiter, otpStartLimiter, body(schemas.otpStart), async (req, res) => {
   try {
     await startSmsVerification(req.body.phone_number);
     res.json({ success: true });

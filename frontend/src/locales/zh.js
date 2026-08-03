@@ -127,6 +127,8 @@ export default {
   noHistory: '暂无请求记录',
   jukeboxOff: '点唱机已暂停',
   jukeboxOffMsg: '歌曲请求目前已关闭，请稍后再来！',
+  venueClosed: '此房间已关闭',
+  venueClosedMsg: '主持人已关闭此房间，目前不接受歌曲请求。',
 
   // Common
   loading: '加载中…',

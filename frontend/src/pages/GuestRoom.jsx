@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Search, ListMusic, Clock, Pause, Settings, X, Sun, Moon, LogOut, Check,
-  ArrowLeft, Globe, User, Receipt, ChevronRight, Disc3, Coins,
+  ArrowLeft, Globe, User, Receipt, ChevronRight, Disc3, Coins, Lock,
 } from 'lucide-react';
 import Logo from '../components/Logo.jsx';
 import VersionFooter from '../components/VersionFooter.jsx';
@@ -392,8 +392,12 @@ export default function GuestRoom() {
   async function loadQueue(venueId) {
     const id = venueId ?? venue?.id;
     if (!id) return;
-    const q = await api.queue.list(id).catch(() => []);
-    setQueue(q);
+    // A transient failure here (cold-start blip, one dropped request) must
+    // not wipe an already-good queue back to empty — that reads to the guest
+    // as "the jukebox stopped" when nothing actually changed. Keep the stale
+    // (but correct) queue and let the next realtime event or 5s poll recover.
+    const q = await api.queue.list(id).catch(() => null);
+    if (q) setQueue(q);
   }
 
   // getByCode (REST → DB) is the single authoritative source of venue state.
@@ -407,8 +411,8 @@ export default function GuestRoom() {
   async function loadBanned(venueId) {
     const id = venueId ?? venue?.id;
     if (!id) return;
-    const b = await api.venues.banned.list(id).catch(() => []);
-    setBanned(b);
+    const b = await api.venues.banned.list(id).catch(() => null);
+    if (b) setBanned(b);
   }
 
   // Real-time + polling fallback. Established the instant venue.id is known —
@@ -450,7 +454,7 @@ export default function GuestRoom() {
     const ch = supabase.channel(`presence-${venue.id}`);
     ch.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        await ch.track({ name: profile.display_name, isRegistered: true, ts: Date.now() });
+        await ch.track({ name: profile.display_name, user_id: profile.id, isRegistered: true, ts: Date.now() });
       }
     });
     return () => supabase.removeChannel(ch);
@@ -475,6 +479,7 @@ export default function GuestRoom() {
     if (requestingKey || !venue) return;
     const isBanned = banned.some(b => b.youtube_video_id === song.videoId);
     if (isBanned) { showToast(t.songBanned); return; }
+    if (venue.status === 'closed') { showToast(t.venueClosedMsg); return; }
     if (venue.jukebox_paused) { setPausedWarn(true); return; }
     const cost = playType === 'normal' ? 2 : quickPrice;
     if (credits < cost) { showToast(t.insufficientCredits); return; }
@@ -509,6 +514,7 @@ export default function GuestRoom() {
       else if (msg === 'song_banned') showToast(t.songBanned);
       else if (msg === 'user_banned') showToast('You have been banned from this jukebox');
       else if (msg === 'jukebox_paused') setPausedWarn(true);
+      else if (msg === 'venue_closed') showToast(t.venueClosedMsg);
       else if (msg === 'already_queued') showToast('You already requested this song');
       else showToast(t.error);
     } finally {
@@ -611,7 +617,15 @@ export default function GuestRoom() {
       {/* ── Status area — hidden on the Home tab, which shows its own big now-playing view ── */}
       {tab !== 'home' && (
         <div style={{ padding: '14px 16px 0' }}>
-          {venue.jukebox_paused ? (
+          {venue.status === 'closed' ? (
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Lock size={24} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{t.venueClosed}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t.venueClosedMsg}</div>
+              </div>
+            </div>
+          ) : venue.jukebox_paused ? (
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
               <Pause size={24} color="var(--text-muted)" style={{ flexShrink: 0 }} />
               <div>

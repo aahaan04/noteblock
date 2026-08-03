@@ -3,6 +3,7 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import { body, schemas } from '../middleware/validate.js';
 import { queueLimiter } from '../middleware/rateLimits.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
 const router = Router({ mergeParams: true }); // gets :venueId from parent
 
@@ -14,8 +15,29 @@ function quickPlayPrice(pendingCount) {
   return 10;
 }
 
+// A 'playing' row with no follow-up transition for this long almost certainly
+// means the host's tab/session that would have marked it 'played' or started
+// the next song is gone (closed mid-song, crashed, lost connection) — not
+// that a single song is still genuinely playing. Real songs essentially never
+// run this long; this exists purely to stop an orphaned row from staying
+// invisible-but-stuck forever (it's excluded from GET results below like any
+// other non-pending/playing row, and blocks nothing once retired to 'played').
+const STUCK_PLAYING_MINUTES = 20;
+
+async function reconcileStuckPlaying(venueId) {
+  const cutoff = new Date(Date.now() - STUCK_PLAYING_MINUTES * 60 * 1000).toISOString();
+  await supabaseAdmin
+    .from('queue_items')
+    .update({ status: 'played' })
+    .eq('venue_id', venueId)
+    .eq('status', 'playing')
+    .lt('started_playing_at', cutoff);
+}
+
 // GET /api/venues/:venueId/queue
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
+  await reconcileStuckPlaying(req.params.venueId);
+
   const { data, error } = await supabaseAdmin
     .from('queue_items')
     .select('*')
@@ -29,10 +51,10 @@ router.get('/', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
   res.json(data);
-});
+}));
 
 // GET /api/venues/:venueId/queue/price — current Quick Play price
-router.get('/price', async (req, res) => {
+router.get('/price', asyncHandler(async (req, res) => {
   const { count } = await supabaseAdmin
     .from('queue_items')
     .select('id', { count: 'exact', head: true })
@@ -40,10 +62,10 @@ router.get('/price', async (req, res) => {
     .eq('status', 'pending');
 
   res.json({ price: quickPlayPrice(count ?? 0), queue_length: count ?? 0 });
-});
+}));
 
 // POST /api/venues/:venueId/queue — add song to queue (requires auth)
-router.post('/', requireAuth, queueLimiter, body(schemas.addQueue), async (req, res) => {
+router.post('/', requireAuth, queueLimiter, body(schemas.addQueue), asyncHandler(async (req, res) => {
   const {
     youtube_video_id,
     song_title,
@@ -63,26 +85,19 @@ router.post('/', requireAuth, queueLimiter, body(schemas.addQueue), async (req, 
     return res.status(400).json({ error: 'jukebox_paused' });
   }
 
-  // Prevent duplicate: same user queuing the same video while it's still pending/playing
-  const { count: dupCount } = await supabaseAdmin
-    .from('queue_items')
-    .select('id', { count: 'exact', head: true })
-    .eq('venue_id', req.params.venueId)
-    .eq('user_id', req.user.id)
-    .eq('youtube_video_id', youtube_video_id)
-    .in('status', ['pending', 'playing']);
-  if (dupCount > 0) {
-    return res.status(400).json({ error: 'already_queued' });
-  }
-
-  // Check if requester is banned
-  const { data: bannedUser } = await supabaseAdmin
-    .from('banned_users')
-    .select('id')
-    .eq('venue_id', req.params.venueId)
-    .eq('requester_name', requester_name)
-    .maybeSingle();
-  if (bannedUser) return res.status(403).json({ error: 'user_banned' });
+  // Check if requester is banned — by their stable account id (can't be
+  // evaded by editing display_name) OR by the submitted name (legacy /
+  // catches a banned name before any user_id was ever recorded for it). Two
+  // separate .eq() queries rather than a single .or() filter string, since
+  // requester_name is user-controlled and a raw .or() template would let a
+  // comma/dot/paren in it corrupt the PostgREST filter syntax.
+  const [{ data: bannedById }, { data: bannedByName }] = await Promise.all([
+    supabaseAdmin.from('banned_users').select('id')
+      .eq('venue_id', req.params.venueId).eq('user_id', req.user.id).maybeSingle(),
+    supabaseAdmin.from('banned_users').select('id')
+      .eq('venue_id', req.params.venueId).eq('requester_name', requester_name).maybeSingle(),
+  ]);
+  if (bannedById || bannedByName) return res.status(403).json({ error: 'user_banned' });
 
   // Calculate credits to charge
   let credits_to_charge = play_type === 'normal' ? 2 : 0;
@@ -95,7 +110,10 @@ router.post('/', requireAuth, queueLimiter, body(schemas.addQueue), async (req, 
     credits_to_charge = quickPlayPrice(count ?? 0);
   }
 
-  // Atomic credit deduction via stored procedure
+  // Atomic credit deduction + duplicate check via stored procedure (the
+  // duplicate check runs inside the same transaction as the credit row
+  // lock, so two concurrent requests for the same user+song can't both
+  // pass it — see migration 0008).
   const { data, error } = await supabaseAdmin.rpc('request_song', {
     p_venue_id: req.params.venueId,
     p_user_id: req.user.id,
@@ -114,10 +132,10 @@ router.post('/', requireAuth, queueLimiter, body(schemas.addQueue), async (req, 
   }
   if (!data.success) return res.status(400).json({ error: data.error, credits_needed: credits_to_charge });
   return res.status(201).json({ success: true, queue_item_id: data.queue_item_id, credits_charged: credits_to_charge });
-});
+}));
 
 // PATCH /api/venues/:venueId/queue/:itemId — update status (host only)
-router.patch('/:itemId', requireAuth, body(schemas.updateQueueStatus), async (req, res) => {
+router.patch('/:itemId', requireAuth, body(schemas.updateQueueStatus), asyncHandler(async (req, res) => {
   const { status } = req.body;
 
   // Verify ownership via venue
@@ -139,9 +157,15 @@ router.patch('/:itemId', requireAuth, body(schemas.updateQueueStatus), async (re
       .neq('id', req.params.itemId);
   }
 
+  const updates = { status };
+  // Records when this row actually started playing, so a future stuck-'playing'
+  // reconciliation (see GET /) can tell "still genuinely playing" apart from
+  // "the host's session that would have advanced this is gone".
+  if (status === 'playing') updates.started_playing_at = new Date().toISOString();
+
   const { data, error } = await supabaseAdmin
     .from('queue_items')
-    .update({ status })
+    .update(updates)
     .eq('id', req.params.itemId)
     .eq('venue_id', req.params.venueId)
     .select()
@@ -152,10 +176,10 @@ router.patch('/:itemId', requireAuth, body(schemas.updateQueueStatus), async (re
     return res.status(500).json({ error: 'Internal server error' });
   }
   res.json(data);
-});
+}));
 
 // DELETE /api/venues/:venueId/queue/:itemId — remove (host only), refunds if pending
-router.delete('/:itemId', requireAuth, async (req, res) => {
+router.delete('/:itemId', requireAuth, asyncHandler(async (req, res) => {
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('id')
@@ -197,6 +221,6 @@ router.delete('/:itemId', requireAuth, async (req, res) => {
   }
 
   res.json({ success: true, refunded });
-});
+}));
 
 export default router;

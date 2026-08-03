@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { requireAuth, requireHost } from '../middleware/auth.js';
 import { body, schemas } from '../middleware/validate.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ const dbErr = (label, err, res) => {
 };
 
 // GET /api/venues — host's own venues
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('venues')
     .select('*')
@@ -21,10 +22,10 @@ router.get('/', requireAuth, async (req, res) => {
 
   if (error) return dbErr('list', error, res);
   res.json(data);
-});
+}));
 
 // GET /api/venues/room/:roomCode — public venue info for guests
-router.get('/room/:roomCode', async (req, res) => {
+router.get('/room/:roomCode', asyncHandler(async (req, res) => {
   const code = req.params.roomCode;
   if (!code || code.length > 20) return res.status(400).json({ error: 'Invalid room code' });
 
@@ -36,10 +37,10 @@ router.get('/room/:roomCode', async (req, res) => {
 
   if (error || !data) return res.status(404).json({ error: 'Venue not found' });
   res.json(data);
-});
+}));
 
 // GET /api/venues/:id — full venue info (host only)
-router.get('/:id', requireAuth, async (req, res) => {
+router.get('/:id', requireAuth, asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('venues')
     .select('*')
@@ -49,10 +50,10 @@ router.get('/:id', requireAuth, async (req, res) => {
 
   if (error || !data) return res.status(404).json({ error: 'Venue not found' });
   res.json(data);
-});
+}));
 
 // POST /api/venues — create venue (host only)
-router.post('/', requireHost, body(schemas.createVenue), async (req, res) => {
+router.post('/', requireHost, body(schemas.createVenue), asyncHandler(async (req, res) => {
   const { name, welcome_credits = 10, crossfade_duration_seconds = 5 } = req.body;
   const room_code = nanoid(8).toUpperCase();
 
@@ -70,10 +71,10 @@ router.post('/', requireHost, body(schemas.createVenue), async (req, res) => {
 
   if (error) return dbErr('create', error, res);
   res.status(201).json(data);
-});
+}));
 
 // PUT /api/venues/:id — update venue settings (host only)
-router.put('/:id', requireAuth, body(schemas.updateVenue), async (req, res) => {
+router.put('/:id', requireAuth, body(schemas.updateVenue), asyncHandler(async (req, res) => {
   const allowed = [
     'name', 'status', 'welcome_credits', 'crossfade_duration_seconds',
     'vibe_description', 'vibe_playlist_urls', 'vibe_mode_enabled',
@@ -98,10 +99,10 @@ router.put('/:id', requireAuth, body(schemas.updateVenue), async (req, res) => {
   if (error) return dbErr('update', error, res);
   if (!data) return res.status(404).json({ error: 'Venue not found' });
   res.json(data);
-});
+}));
 
 // GET /api/venues/:id/banned — list banned songs (public; used by guest to filter results)
-router.get('/:id/banned', async (req, res) => {
+router.get('/:id/banned', asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('banned_songs')
     .select('*')
@@ -110,10 +111,10 @@ router.get('/:id/banned', async (req, res) => {
 
   if (error) return dbErr('banned/list', error, res);
   res.json(data);
-});
+}));
 
 // POST /api/venues/:id/banned — ban a song (host only)
-router.post('/:id/banned', requireAuth, body(schemas.banSong), async (req, res) => {
+router.post('/:id/banned', requireAuth, body(schemas.banSong), asyncHandler(async (req, res) => {
   const { youtube_video_id, song_title, thumbnail_url, channel } = req.body;
 
   const { data: venue } = await supabaseAdmin
@@ -132,10 +133,10 @@ router.post('/:id/banned', requireAuth, body(schemas.banSong), async (req, res) 
 
   if (error) return dbErr('banned/add', error, res);
   res.status(201).json(data);
-});
+}));
 
 // DELETE /api/venues/:id/banned/:songId — unban (host only)
-router.delete('/:id/banned/:songId', requireAuth, async (req, res) => {
+router.delete('/:id/banned/:songId', requireAuth, asyncHandler(async (req, res) => {
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('id')
@@ -152,17 +153,21 @@ router.delete('/:id/banned/:songId', requireAuth, async (req, res) => {
 
   if (error) return dbErr('banned/remove', error, res);
   res.json({ success: true });
-});
+}));
 
 // POST /api/venues/:id/gift — gift credits to a signed-in user (host only)
-router.post('/:id/gift', requireAuth, body(schemas.gift), async (req, res) => {
-  const { guest_identifier, amount } = req.body;
+router.post('/:id/gift', requireAuth, body(schemas.gift), asyncHandler(async (req, res) => {
+  const { guest_identifier, guest_user_id, amount } = req.body;
 
   const { data, error } = await supabaseAdmin.rpc('gift_credits', {
     p_host_id: req.user.id,
     p_guest_identifier: guest_identifier,
     p_amount: amount,
     p_venue_id: req.params.id,
+    // Preferred path: a stable account id from the Users tab (which the
+    // frontend now always has, since it's resolved from a real queue_item).
+    // Falls back to the name/email lookup only if none was supplied.
+    p_guest_user_id: guest_user_id ?? null,
   });
 
   if (error) {
@@ -177,18 +182,19 @@ router.post('/:id/gift', requireAuth, body(schemas.gift), async (req, res) => {
     return res.status(400).json({ error: data?.error ?? 'gift_failed' });
   }
   res.json({ success: true });
-});
+}));
 
 // GET /api/venues/:id/users — list requesters with stats + ban status
-router.get('/:id/users', requireAuth, async (req, res) => {
+router.get('/:id/users', requireAuth, asyncHandler(async (req, res) => {
   const { data: venue } = await supabaseAdmin.from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
   const { data: items } = await supabaseAdmin
     .from('queue_items')
-    .select('requester_name, credits_charged, status, requested_at')
+    .select('requester_name, credits_charged, status, requested_at, user_id')
     .eq('venue_id', req.params.id)
-    .in('status', ['pending', 'playing', 'played']);
+    .in('status', ['pending', 'playing', 'played'])
+    .order('requested_at', { ascending: true });
 
   const { data: bannedUsers } = await supabaseAdmin
     .from('banned_users')
@@ -196,14 +202,20 @@ router.get('/:id/users', requireAuth, async (req, res) => {
     .eq('venue_id', req.params.id);
 
   const bannedNames = new Set((bannedUsers ?? []).map(b => b.requester_name));
+  const bannedUserIds = new Set((bannedUsers ?? []).map(b => b.user_id).filter(Boolean));
 
   const userMap = {};
   for (const item of items ?? []) {
     const name = item.requester_name || 'Guest';
-    if (!userMap[name]) userMap[name] = { name, requests: 0, credits: 0, lastSeen: item.requested_at };
+    if (!userMap[name]) userMap[name] = { name, requests: 0, credits: 0, lastSeen: item.requested_at, user_id: item.user_id ?? null };
     userMap[name].requests++;
     userMap[name].credits += item.credits_charged ?? 0;
     if (item.requested_at > userMap[name].lastSeen) userMap[name].lastSeen = item.requested_at;
+    // items is ordered oldest -> newest, so the last write here is always
+    // this name's most recent request — the current, best-known account id
+    // to ban/gift by (a name is only ever ambiguous across different
+    // accounts in the rare case someone reused an old display_name).
+    if (item.user_id) userMap[name].user_id = item.user_id;
   }
 
   // "Verified" means phone-verified, not merely "has an account" — an
@@ -221,14 +233,18 @@ router.get('/:id/users', requireAuth, async (req, res) => {
   }
 
   const users = Object.values(userMap)
-    .map(u => ({ ...u, banned: bannedNames.has(u.name), isRegistered: verifiedNames.has(u.name) }))
+    .map(u => ({
+      ...u,
+      banned: bannedNames.has(u.name) || (!!u.user_id && bannedUserIds.has(u.user_id)),
+      isRegistered: verifiedNames.has(u.name),
+    }))
     .sort((a, b) => b.requests - a.requests);
 
   res.json({ users, bannedUsers: bannedUsers ?? [] });
-});
+}));
 
 // DELETE /api/venues/:id/users/:name — remove user (clears pending requests + refunds)
-router.delete('/:id/users/:name', requireAuth, async (req, res) => {
+router.delete('/:id/users/:name', requireAuth, asyncHandler(async (req, res) => {
   const { data: venue } = await supabaseAdmin
     .from('venues').select('id')
     .eq('id', req.params.id).eq('host_id', req.user.id).single();
@@ -265,26 +281,47 @@ router.delete('/:id/users/:name', requireAuth, async (req, res) => {
   }
 
   res.json({ success: true, refunded });
-});
+}));
 
-// POST /api/venues/:id/banned-users — ban a user by name
-router.post('/:id/banned-users', requireAuth, body(schemas.banUser), async (req, res) => {
-  const { requester_name } = req.body;
+// POST /api/venues/:id/banned-users — ban a user by name, and by their stable
+// account id when known (from the Users tab, resolved from a real
+// queue_item) — so the ban survives the guest editing their display_name.
+// Manual check-then-write rather than a single .upsert(onConflict) because
+// there are now two independent things a row can already exist by (name, or
+// user_id), and onConflict only targets one constraint at a time.
+router.post('/:id/banned-users', requireAuth, body(schemas.banUser), asyncHandler(async (req, res) => {
+  const { requester_name, user_id } = req.body;
 
   const { data: venue } = await supabaseAdmin.from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
-  const { data, error } = await supabaseAdmin
-    .from('banned_users')
-    .upsert({ venue_id: req.params.id, requester_name }, { onConflict: 'venue_id,requester_name' })
-    .select().single();
+  let existing = null;
+  if (user_id) {
+    ({ data: existing } = await supabaseAdmin.from('banned_users').select('id')
+      .eq('venue_id', req.params.id).eq('user_id', user_id).maybeSingle());
+  }
+  if (!existing) {
+    ({ data: existing } = await supabaseAdmin.from('banned_users').select('id')
+      .eq('venue_id', req.params.id).eq('requester_name', requester_name).maybeSingle());
+  }
+
+  let data, error;
+  if (existing) {
+    ({ data, error } = await supabaseAdmin.from('banned_users')
+      .update({ requester_name, user_id: user_id ?? null })
+      .eq('id', existing.id).select().single());
+  } else {
+    ({ data, error } = await supabaseAdmin.from('banned_users')
+      .insert({ venue_id: req.params.id, requester_name, user_id: user_id ?? null })
+      .select().single());
+  }
 
   if (error) return dbErr('banned-users/add', error, res);
   res.status(201).json(data);
-});
+}));
 
 // DELETE /api/venues/:id/banned-users/:bannedUserId — unban
-router.delete('/:id/banned-users/:bannedUserId', requireAuth, async (req, res) => {
+router.delete('/:id/banned-users/:bannedUserId', requireAuth, asyncHandler(async (req, res) => {
   const { data: venue } = await supabaseAdmin.from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
 
@@ -296,10 +333,10 @@ router.delete('/:id/banned-users/:bannedUserId', requireAuth, async (req, res) =
 
   if (error) return dbErr('banned-users/remove', error, res);
   res.json({ success: true });
-});
+}));
 
 // GET /api/venues/:id/stats — basic stats
-router.get('/:id/stats', requireAuth, async (req, res) => {
+router.get('/:id/stats', requireAuth, asyncHandler(async (req, res) => {
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('id')
@@ -331,7 +368,7 @@ router.get('/:id/stats', requireAuth, async (req, res) => {
     .slice(0, 5);
 
   res.json({ totalRequests, totalCredits, topSongs });
-});
+}));
 
 // ── Venue Vibe File system ──────────────────────────────────────────────────
 // All routes below are host-only. venue_vibe_data is populated entirely by
@@ -341,7 +378,7 @@ router.get('/:id/stats', requireAuth, async (req, res) => {
 // GET /api/venues/:id/vibe-data — the venue's own auto-generated vibe stats
 // (used for the Vibe tab's progress line, locked/unlocked Auto-Vibe state,
 // and to build the downloadable vibe file).
-router.get('/:id/vibe-data', requireAuth, async (req, res) => {
+router.get('/:id/vibe-data', requireAuth, asyncHandler(async (req, res) => {
   const { data: venue } = await supabaseAdmin
     .from('venues').select('id, room_code').eq('id', req.params.id).eq('host_id', req.user.id).single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
@@ -363,7 +400,7 @@ router.get('/:id/vibe-data', requireAuth, async (req, res) => {
     quick_play_vs_normal_ratio: { quick_play_count: 0, normal_play_count: 0, quick_play_percentage: 0 },
     average_session_request_count: 0, vibe_confidence_score: 0, schema_version: '1.0',
   });
-});
+}));
 
 const VIBE_FILE_REQUIRED_FIELDS = ['schema_version', 'top_songs_alltime', 'top_songs_last_30_days'];
 const VIBE_FILE_SUPPORTED_VERSIONS = ['1.0'];
@@ -398,7 +435,7 @@ function validateVibeFile(payload) {
 // another venue (or a previously downloaded one). Stored entirely separately
 // from the venue's own venue_vibe_data row — this never overwrites or affects
 // the venue's own collected data.
-router.post('/:id/vibe-file/upload', requireAuth, async (req, res) => {
+router.post('/:id/vibe-file/upload', requireAuth, asyncHandler(async (req, res) => {
   const { data: venue } = await supabaseAdmin
     .from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
@@ -420,10 +457,10 @@ router.post('/:id/vibe-file/upload', requireAuth, async (req, res) => {
 
   if (error) return dbErr('vibe-file/upload', error, res);
   res.json({ success: true, ...data });
-});
+}));
 
 // DELETE /api/venues/:id/vibe-file — remove the uploaded vibe file
-router.delete('/:id/vibe-file', requireAuth, async (req, res) => {
+router.delete('/:id/vibe-file', requireAuth, asyncHandler(async (req, res) => {
   const { data: venue } = await supabaseAdmin
     .from('venues').select('id').eq('id', req.params.id).eq('host_id', req.user.id).single();
   if (!venue) return res.status(403).json({ error: 'Forbidden' });
@@ -435,6 +472,6 @@ router.delete('/:id/vibe-file', requireAuth, async (req, res) => {
 
   if (error) return dbErr('vibe-file/remove', error, res);
   res.json({ success: true });
-});
+}));
 
 export default router;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { creditLimiter } from '../middleware/rateLimits.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.get('/packages', (_req, res) => {
 
 // POST /api/credits/purchase-intent
 // Creates a Razorpay order (stub — returns placeholder until Razorpay is configured)
-router.post('/purchase-intent', requireAuth, creditLimiter, async (req, res) => {
+router.post('/purchase-intent', requireAuth, creditLimiter, asyncHandler(async (req, res) => {
   const { package_id } = req.body;
   const pkg = PACKAGES.find(p => p.id === package_id);
   if (!pkg) return res.status(400).json({ error: 'Invalid package' });
@@ -46,11 +47,11 @@ router.post('/purchase-intent', requireAuth, creditLimiter, async (req, res) => 
     error: 'payment_not_configured',
     message: 'Razorpay not yet configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to backend/.env.',
   });
-});
+}));
 
 // POST /api/credits/verify
 // Verifies Razorpay payment signature and grants credits
-router.post('/verify', requireAuth, async (req, res) => {
+router.post('/verify', requireAuth, asyncHandler(async (req, res) => {
   // TODO: Uncomment when Razorpay keys are available
   //
   // const { razorpay_order_id, razorpay_payment_id, razorpay_signature, credits } = req.body;
@@ -78,6 +79,6 @@ router.post('/verify', requireAuth, async (req, res) => {
   // return res.json({ success: true });
 
   res.status(503).json({ error: 'payment_not_configured' });
-});
+}));
 
 export default router;

@@ -53,6 +53,36 @@ export const otpStartLimiter = rateLimit({
   message: otpMsg,
 });
 
+// The phone-keyed limiter above bounds "codes sent to one number" but not
+// "codes sent to many different numbers from one IP" — without this, a
+// single attacker IP could SMS-bomb hundreds of distinct real phone numbers
+// (at this project's Twilio expense) since the global 1000/15min limiter is
+// far too loose to catch that on its own. This is deliberately looser than
+// the per-number cap — it only needs to stop bulk abuse, not slow down a
+// real user retrying their own number a few times.
+export const otpStartIpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKeyGenerator,
+  message: otpMsg,
+});
+
+// Per-account cap on welcome-credit grants. grant_welcome_credits is a no-op
+// (0 credits) for a venue the account already joined, but nothing stops an
+// account from scripting "create a throwaway venue with the max 200 welcome
+// credits, then call this once" in a loop across many different venues —
+// this bounds that regardless of how many venues exist.
+export const welcomeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || ipKeyGenerator(req.ip),
+  message: { error: 'Too many join attempts. Please try again later.' },
+});
+
 // A little more headroom than the send limiter — legitimate users mistype
 // codes — but still bounded well below what it'd take to brute-force a
 // 6-digit code (Twilio Verify also locks out a verification after repeated

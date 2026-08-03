@@ -297,6 +297,15 @@ export default function VenueControl() {
     });
   }
 
+  // Shared by the manual "Reset Vibe History" button and CrossfadePlayer's
+  // own onVibeHistoryReset (fired the instant its internal rotation
+  // completes a full lap) — both need the exact same effect: clear the
+  // persisted history so a fresh lap starts with nothing marked played.
+  function resetVibeHistory() {
+    setVibePlayedIds([]);
+    handleVenueUpdate({ vibe_played_video_ids: [] });
+  }
+
   function handleSkip() {
     if (skipping) return;
     setSkipping(true);
@@ -357,7 +366,8 @@ export default function VenueControl() {
               vibePlayedIds={vibePlayedIds}
               onMarkPlaying={handleMarkPlaying} onMarkPlayed={handleMarkPlayed}
               onNowPlaying={setNowPlaying} onVibeActive={setVibeActive}
-              onVibePlayed={handleVibePlayed} venueId={id}
+              onVibePlayed={handleVibePlayed} onVibeHistoryReset={resetVibeHistory}
+              venueId={id}
             />
           </div>
           {/* Visualizer on top — purely cosmetic */}
@@ -456,7 +466,7 @@ export default function VenueControl() {
           <QueueDisplay items={queue} isHost onRemove={handleRemove} />
         </>
       )}
-      {tab === 'vibe'   && <VibeSettings venue={venue} venueId={id} token={token} onUpdate={handleVenueUpdate} onVenueRefresh={refetchVenueAndVibe} vibePlayedCount={vibePlayedIds.length} onResetVibeHistory={() => { setVibePlayedIds([]); handleVenueUpdate({ vibe_played_video_ids: [] }); }} />}
+      {tab === 'vibe'   && <VibeSettings venue={venue} venueId={id} token={token} onUpdate={handleVenueUpdate} onVenueRefresh={refetchVenueAndVibe} vibePlayedCount={vibePlayedIds.length} onResetVibeHistory={resetVibeHistory} />}
       {tab === 'ban'    && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />}
       {tab === 'users'  && <UsersPanel venueId={id} token={token} />}
       {tab === 'stats'  && <StatsPanel stats={stats} />}
@@ -1158,8 +1168,11 @@ function UsersPanel({ venueId, token }) {
     return () => window.removeEventListener('click', close);
   }, [openMenu]);
 
-  async function handleBan(name) {
-    await api.venues.banUser(venueId, { requester_name: name }, token).catch(() => {});
+  async function handleBan(user) {
+    // Include user_id (from the most recent queue_item resolved server-side)
+    // whenever known, so the ban survives this guest later editing their own
+    // display_name — matching by name alone can be evaded.
+    await api.venues.banUser(venueId, { requester_name: user.name, user_id: user.user_id ?? undefined }, token).catch(() => {});
     setModal(null); load();
   }
   async function handleUnban(name) {
@@ -1186,12 +1199,15 @@ function UsersPanel({ venueId, token }) {
     // Best-effort backend update (marks queue_items as 'removed' status)
     api.venues.removeUser(venueId, name, token).catch(() => {});
   }
-  async function handleGift(name) {
+  async function handleGift(user) {
     const parsed = parseInt(giftAmount);
     if (!parsed || parsed < 1) { setGiftMsg('Enter a valid amount (minimum 1)'); return; }
     try {
-      await api.venues.gift(venueId, { guest_identifier: name, amount: parsed }, token);
-      setGiftMsg(`${parsed} credits sent to ${name}`);
+      // guest_user_id (when known) targets the account directly, skipping the
+      // fragile name/email lookup a guest could otherwise intercept by
+      // renaming themselves to match who the host meant to gift.
+      await api.venues.gift(venueId, { guest_identifier: user.name, guest_user_id: user.user_id ?? undefined, amount: parsed }, token);
+      setGiftMsg(`${parsed} credits sent to ${user.name}`);
       setTimeout(() => { setGiftMsg(''); setModal(null); }, 2500);
     } catch (err) {
       const msg = err.data?.message ?? err.data?.error ?? 'error';
@@ -1204,10 +1220,16 @@ function UsersPanel({ venueId, token }) {
   const onlineNames = new Set(onlineUsers.map(u => u.name));
   const historicalNames = new Set(users.map(u => u.name));
 
+  const bannedUserIds = new Set(bannedUsers.map(b => b.user_id).filter(Boolean));
   const visibleUsers = users.filter(u => !removedNames.has(u.name));
   const onlineOnly = onlineUsers
     .filter(p => !historicalNames.has(p.name) && !removedNames.has(p.name))
-    .map(p => ({ name: p.name, requests: 0, credits: 0, isRegistered: p.isRegistered, banned: false, onlineOnly: true }));
+    .map(p => ({
+      name: p.name, requests: 0, credits: 0, isRegistered: p.isRegistered,
+      user_id: p.user_id ?? null,
+      banned: !!p.user_id && bannedUserIds.has(p.user_id),
+      onlineOnly: true,
+    }));
 
   const allUsers = [...visibleUsers, ...onlineOnly];
   const displayed = filter === 'banned' ? allUsers.filter(u => u.banned) : allUsers;
@@ -1365,7 +1387,7 @@ function UsersPanel({ venueId, token }) {
             <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>Ban "{modal.user.name}"?</p>
             <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-secondary)' }}>They won't be able to request songs in this room anymore.</p>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn-primary" style={{ flex: 1, background: '#f87171' }} onClick={() => handleBan(modal.user.name)}>
+              <button className="btn-primary" style={{ flex: 1, background: '#f87171' }} onClick={() => handleBan(modal.user)}>
                 <Ban size={15} /> Ban
               </button>
               <button className="btn-secondary" onClick={() => setModal(null)}>Cancel</button>
@@ -1413,7 +1435,7 @@ function UsersPanel({ venueId, token }) {
             />
             {giftMsg && <p style={{ margin: '0 0 12px', fontSize: 13, color: giftMsg.startsWith('✓') ? '#34d399' : '#f87171' }}>{giftMsg}</p>}
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={() => handleGift(modal.user.name)}>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={() => handleGift(modal.user)}>
                 <Gift size={15} /> Gift {parseInt(giftAmount) > 0 ? parseInt(giftAmount) : '…'} Credits
               </button>
               <button className="btn-secondary" onClick={() => setModal(null)}>Cancel</button>
