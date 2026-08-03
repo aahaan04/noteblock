@@ -94,6 +94,15 @@ export default function VenueControl() {
   // the host can actually see it (e.g. a broken/quota-exceeded YouTube API
   // key) instead of Vibe Mode just silently having nothing to play.
   const [vibeLoadError, setVibeLoadError] = useState(null);
+  // Whether the two YouTube iframe players have actually finished
+  // initialising. There was previously NO visibility into this anywhere in
+  // the host UI — CrossfadePlayer's own "Loading player…" text renders
+  // inside an element VenueControl deliberately keeps invisible (opacity 0,
+  // Visualizer drawn on top) — so if the player got stuck (ad blocker,
+  // network/DNS filter blocking youtube.com, slow connection) Start would
+  // silently do nothing forever with no way to tell that apart from broken.
+  const [playerReady, setPlayerReady] = useState(false);
+  const [playerInitSlow, setPlayerInitSlow] = useState(false);
   const [nowPlaying, setNowPlaying] = useState(null);
   const [vibeActive, setVibeActive] = useState(false);
   const [vibePlayedIds, setVibePlayedIds] = useState([]); // IDs of vibe videos already played this session
@@ -119,6 +128,17 @@ export default function VenueControl() {
     if (!id || !token) return;
     loadVenue(); loadQueue(); loadBanned();
   }, [id, token]);
+
+  // If the YouTube players haven't finished initialising within a generous
+  // window, something is actually wrong (ad blocker or network/DNS filter
+  // blocking youtube.com, a very slow connection) rather than just normal
+  // loading — surface that instead of leaving Start silently non-functional
+  // forever with no explanation. Real init normally takes well under this.
+  useEffect(() => {
+    if (playerReady) { setPlayerInitSlow(false); return; }
+    const t = setTimeout(() => setPlayerInitSlow(true), 10000);
+    return () => clearTimeout(t);
+  }, [playerReady]);
 
   // Write vibe track info to venue so guests can see what's playing
   useEffect(() => {
@@ -341,6 +361,14 @@ export default function VenueControl() {
       setTimeout(() => setStartEmptyWarning(false), 4000);
       return;
     }
+    // The click is never actually lost here even if the player isn't ready
+    // yet — CrossfadePlayer.start() defers it internally and fires once
+    // initialisation completes. This is purely about giving the host
+    // immediate feedback instead of a click that looks like it did nothing.
+    if (!playerReady) {
+      setStartEmptyWarning('loading');
+      setTimeout(() => setStartEmptyWarning(false), 4000);
+    }
     playerRef.current?.start();
   }
   // Stable reference so React.memo(QueueDisplay/QueueItem) can skip re-renders
@@ -398,6 +426,7 @@ export default function VenueControl() {
               onMarkPlaying={handleMarkPlaying} onMarkPlayed={handleMarkPlayed}
               onNowPlaying={setNowPlaying} onVibeActive={setVibeActive}
               onVibePlayed={handleVibePlayed} onVibeHistoryReset={resetVibeHistory}
+              onPlayerReady={() => setPlayerReady(true)}
               venueId={id}
             />
           </div>
@@ -485,11 +514,27 @@ export default function VenueControl() {
           <span style={{ fontSize: 12, color: 'var(--credits)', fontWeight: 600, lineHeight: 1.4 }}>{t.guestsCannotRequest}</span>
         </div>
       )}
-      {startEmptyWarning && (
+      {startEmptyWarning === 'loading' && (
+        <div style={{ background: '#2A1408', border: '1px solid #FF6B35', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
+          <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: 'var(--credits)', fontWeight: 600, lineHeight: 1.4 }}>
+            Player is still loading — it&apos;ll start automatically the moment it&apos;s ready, no need to click again.
+          </span>
+        </div>
+      )}
+      {startEmptyWarning === true && (
         <div style={{ background: '#2A1408', border: '1px solid #FF6B35', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
           <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
           <span style={{ fontSize: 12, color: 'var(--credits)', fontWeight: 600, lineHeight: 1.4 }}>
             Nothing to play yet — the queue is empty and Vibe Mode has no videos loaded. Check the Vibe tab.
+          </span>
+        </div>
+      )}
+      {playerInitSlow && (
+        <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
+          <AlertTriangle size={18} color="#f87171" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: '#f87171', fontWeight: 600, lineHeight: 1.4 }}>
+            The player hasn&apos;t finished loading after 10+ seconds — this usually means an ad blocker or network filter is blocking YouTube embeds. Try disabling it for this site, or refresh the page.
           </span>
         </div>
       )}

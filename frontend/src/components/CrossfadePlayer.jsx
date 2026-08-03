@@ -42,7 +42,7 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
 const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   { queue, vibeVideos, vibeEnabled, crossfadeSecs = 5, jukeboxPaused = false,
     vibePlayedIds = [], onMarkPlaying, onMarkPlayed, onNowPlaying, onVibeActive, onVibePlayed,
-    onVibeHistoryReset, venueId },
+    onVibeHistoryReset, onPlayerReady, venueId },
   ref
 ) {
   const [ytReady,       setYtReady]       = useState(false);
@@ -607,6 +607,12 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
           readyCount.current++;
           if (readyCount.current < 2) return;
           initialized.current = true;
+          // Lets the host UI actually show "player ready" instead of having
+          // zero visibility into this — the component's own "Loading
+          // player…" text renders inside this same element, which the host
+          // never sees (VenueControl deliberately keeps it at opacity 0,
+          // with the Visualizer drawn on top as the visible layer).
+          onPlayerReady?.();
           // If resumeFromSaved was called before the players were ready, fire it now
           if (pendingResumeRef.current) {
             const { entry, elapsed } = pendingResumeRef.current;
