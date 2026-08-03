@@ -90,9 +90,17 @@ export default function VenueControl() {
   const [queue, setQueue] = useState([]);
   const [banned, setBanned] = useState([]);
   const [vibeVideos, setVibeVideos] = useState([]);
+  // null = no error / not yet loaded. Set whenever loadVibeVideos fails so
+  // the host can actually see it (e.g. a broken/quota-exceeded YouTube API
+  // key) instead of Vibe Mode just silently having nothing to play.
+  const [vibeLoadError, setVibeLoadError] = useState(null);
   const [nowPlaying, setNowPlaying] = useState(null);
   const [vibeActive, setVibeActive] = useState(false);
   const [vibePlayedIds, setVibePlayedIds] = useState([]); // IDs of vibe videos already played this session
+  // Brief inline warning when Start is clicked but there is genuinely
+  // nothing queued and Vibe Mode has no videos — without this the click
+  // just does nothing, indistinguishable from the button being broken.
+  const [startEmptyWarning, setStartEmptyWarning] = useState(false);
   const [tab, setTab] = useState(() => window.innerWidth < 768 ? 'player' : 'queue');
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -232,7 +240,11 @@ export default function VenueControl() {
     } catch {}
   }
   async function loadQueue() {
-    try { const q = await api.queue.list(id); setQueue(q); } catch {}
+    // Non-destructive: a transient fetch error must not wipe an
+    // already-correct queue back to empty (that reads as "the queue is
+    // empty" to the host, when nothing actually changed) — realtime/poll
+    // will retry shortly regardless.
+    try { const q = await api.queue.list(id); setQueue(q); } catch (err) { console.error('[loadQueue]', err); }
   }
   async function loadBanned() {
     try { const b = await api.venues.banned.list(id); setBanned(b); } catch {}
@@ -242,6 +254,7 @@ export default function VenueControl() {
   }
   async function loadVibeVideos(v = venue) {
     if (!v) return;
+    setVibeLoadError(null);
     try {
       let videos = [];
       const source = v.vibe_source ?? 'description';
@@ -266,7 +279,15 @@ export default function VenueControl() {
       }
 
       setVibeVideos(videos);
-    } catch {}
+    } catch (err) {
+      // This used to be a bare `catch {}` — a failed YouTube API call (bad/
+      // missing key, quota exceeded, API not enabled) silently left
+      // vibeVideos empty with zero indication anywhere in the UI. If the
+      // queue is also empty, Start then has nothing to play and just looks
+      // broken, with no clue why. Surface it instead.
+      console.error('[loadVibeVideos]', err);
+      setVibeLoadError(err?.data?.error ?? err?.message ?? 'Failed to load Vibe Mode videos');
+    }
   }
 
   useEffect(() => {
@@ -311,6 +332,16 @@ export default function VenueControl() {
     setSkipping(true);
     playerRef.current?.skip();
     setTimeout(() => setSkipping(false), 2500);
+  }
+  function handleStart() {
+    const hasPending = queue.some(i => i.status === 'pending');
+    const hasVibe = venue.vibe_mode_enabled && vibeVideos.length > 0;
+    if (!hasPending && !hasVibe) {
+      setStartEmptyWarning(true);
+      setTimeout(() => setStartEmptyWarning(false), 4000);
+      return;
+    }
+    playerRef.current?.start();
   }
   // Stable reference so React.memo(QueueDisplay/QueueItem) can skip re-renders
   // when VenueControl re-renders for unrelated reasons (nowPlaying, venue, etc.).
@@ -420,7 +451,7 @@ export default function VenueControl() {
         </button>
         {!nowPlaying && !venue.jukebox_paused && (
           <button
-            onClick={() => playerRef.current?.start()}
+            onClick={handleStart}
             style={{
               flex: 1, height: 48, borderRadius: 9, border: 'none',
               background: '#22c55e', color: 'var(--bg-app)', fontWeight: 700, fontSize: 14,
@@ -454,6 +485,14 @@ export default function VenueControl() {
           <span style={{ fontSize: 12, color: 'var(--credits)', fontWeight: 600, lineHeight: 1.4 }}>{t.guestsCannotRequest}</span>
         </div>
       )}
+      {startEmptyWarning && (
+        <div style={{ background: '#2A1408', border: '1px solid #FF6B35', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
+          <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: 'var(--credits)', fontWeight: 600, lineHeight: 1.4 }}>
+            Nothing to play yet — the queue is empty and Vibe Mode has no videos loaded. Check the Vibe tab.
+          </span>
+        </div>
+      )}
     </div>
   );
 
@@ -466,7 +505,7 @@ export default function VenueControl() {
           <QueueDisplay items={queue} isHost onRemove={handleRemove} />
         </>
       )}
-      {tab === 'vibe'   && <VibeSettings venue={venue} venueId={id} token={token} onUpdate={handleVenueUpdate} onVenueRefresh={refetchVenueAndVibe} vibePlayedCount={vibePlayedIds.length} onResetVibeHistory={resetVibeHistory} />}
+      {tab === 'vibe'   && <VibeSettings venue={venue} venueId={id} token={token} onUpdate={handleVenueUpdate} onVenueRefresh={refetchVenueAndVibe} vibePlayedCount={vibePlayedIds.length} onResetVibeHistory={resetVibeHistory} vibeVideoCount={vibeVideos.length} vibeLoadError={vibeLoadError} />}
       {tab === 'ban'    && <BanManager venueId={id} token={token} banned={banned} bannedIds={bannedIds} onReload={loadBanned} />}
       {tab === 'users'  && <UsersPanel venueId={id} token={token} />}
       {tab === 'stats'  && <StatsPanel stats={stats} />}
@@ -724,7 +763,7 @@ const VIBE_SOURCE_OPTIONS = [
   { key: 'auto', label: 'Auto-Vibe' },
 ];
 
-function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePlayedCount = 0, onResetVibeHistory }) {
+function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePlayedCount = 0, onResetVibeHistory, vibeVideoCount = 0, vibeLoadError = null }) {
   const { t } = useLang();
   const [desc, setDesc] = useState(venue.vibe_description ?? '');
   const [urls, setUrls] = useState((venue.vibe_playlist_urls ?? []).join('\n'));
@@ -830,6 +869,27 @@ function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePla
           label={t.enableVibe}
           description="Auto-play background music from a playlist or description when the queue is empty."
         />
+
+        {/* Makes the actual resolved video pool visible — without this the
+            host has no way to tell "Vibe Mode is on but has 0 videos" (e.g.
+            a broken/quota-exceeded YouTube API key, or a description that
+            matched nothing) from "it's working fine", and Start silently
+            does nothing once the queue is also empty. */}
+        {enabled && (
+          vibeLoadError ? (
+            <div style={{ marginTop: 12, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#f87171', lineHeight: 1.5 }}>
+              Couldn&apos;t load Vibe Mode videos: {vibeLoadError}. Check the YouTube API key/quota on the server, or try a different Vibe Source.
+            </div>
+          ) : vibeVideoCount === 0 ? (
+            <div style={{ marginTop: 12, background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.3)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              No Vibe Mode videos loaded yet — Start won&apos;t have anything to play until the queue has a request or this finds videos. Check your Vibe Source below.
+            </div>
+          ) : (
+            <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+              {vibeVideoCount} video{vibeVideoCount === 1 ? '' : 's'} loaded and ready to play.
+            </div>
+          )
+        )}
 
         {/* Source selector — only one of the 4 sources is active at a time.
             Data collection (venue_vibe_data) keeps running in the background
