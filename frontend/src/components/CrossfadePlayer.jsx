@@ -262,8 +262,8 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
 
   useImperativeHandle(ref, () => ({
     start() {
-      if (!initialized.current || S.current.mode !== 'idle') return;
-      beginPlayback();
+      if (S.current.mode !== 'idle') return;
+      requestPlaybackStart();
     },
     skip() {
       if (S.current.crossfading) return;
@@ -349,7 +349,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
   const prevPausedRef = useRef(jukeboxPaused);
 
   // Begins playback from a standing start (queue first, then vibe). Shared by
-  // the imperative start() and by resuming out of a paused-and-idle state.
+  // requestPlaybackStart() and by resuming out of a paused-and-idle state.
   function beginPlayback() {
     audioUnlocked.current = true;
     startSilentLoop();
@@ -358,6 +358,19 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     if (req) { startEntry(req); return; }
     const vibe = getNextVibe(null);
     if (vibe) startEntry(vibe);
+  }
+
+  // Entry point for both the Start button and a resume-while-idle. The two
+  // YouTube iframe players can genuinely take a couple of seconds (longer on
+  // a slow connection) to fire onReady after mount, and there was previously
+  // no feedback when a click landed during that window — initialized.current
+  // was false, the click's handler just returned, and the button looked like
+  // it did nothing. Deferring via pendingStartRef instead means the click is
+  // honoured the moment the players finish initialising (picked up in
+  // onReady below), rather than silently dropped.
+  function requestPlaybackStart() {
+    if (!initialized.current) { pendingStartRef.current = true; return; }
+    beginPlayback();
   }
 
   useEffect(() => {
@@ -376,12 +389,10 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
     // Only react to an actual paused -> resumed transition.
     if (!wasPaused) return;
 
-    // Players not up yet (host hit Resume before the YouTube API finished
-    // loading) — hand off to onReady rather than dropping the resume.
-    if (!initialized.current) { pendingStartRef.current = true; return; }
-
-    clearInterval(pauseFadeRef.current);
     if (S.current.mode !== 'idle') {
+      // Players are guaranteed initialised here — mode can only be non-idle
+      // once startEntry has already run on this instance.
+      clearInterval(pauseFadeRef.current);
       fadeInOnResume(800);
       wasPlayingRef.current = true;
       acquireWakeLock(); // signal active playback to the browser
@@ -391,7 +402,7 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
       // The Start button is hidden whenever the venue is paused, so Resume is
       // the only control the host has — it has to actually begin playback
       // here, otherwise the click appears to do nothing at all.
-      beginPlayback();
+      requestPlaybackStart();
     }
   }, [jukeboxPaused]); // eslint-disable-line
 
@@ -511,7 +522,8 @@ const CrossfadePlayer = forwardRef(function CrossfadePlayer(
               setTimeout(() => { try { getActive()?.seekTo(elapsed, true); } catch {} }, 2500);
             }
           } else if (pendingStartRef.current) {
-            // Host hit Resume while the players were still loading.
+            // Host hit Start (or Resume-while-idle) while the players were
+            // still loading.
             pendingStartRef.current = false;
             if (S.current.mode === 'idle') beginPlayback();
           }
