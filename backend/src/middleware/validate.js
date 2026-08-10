@@ -94,7 +94,7 @@ export const schemas = {
   // NOTE: 'role' is intentionally absent — users must not change their own role.
   updateProfile: z.object({
     display_name: safeName(50).optional(),
-    language: z.enum(['en', 'hi', 'zh']).optional(),
+    language: z.enum(['en', 'hi']).optional(),
   }),
 
   // POST /api/auth/otp/start

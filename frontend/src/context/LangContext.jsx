@@ -1,9 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import en from '../locales/en.js';
 import hi from '../locales/hi.js';
-import zh from '../locales/zh.js';
 
-const locales = { en, hi, zh };
+const locales = { en, hi };
 
 const LangContext = createContext(null);
 

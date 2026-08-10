@@ -844,11 +844,11 @@ export default function GuestRoom() {
                 <span style={settingsIconStyle}><Globe size={16} /></span>
                 <div>
                   <div style={settingsLabelStyle}>{t.language}</div>
-                  <div style={settingsSubStyle}>{lang === 'en' ? t.english : lang === 'hi' ? t.hindi : t.mandarin}</div>
+                  <div style={settingsSubStyle}>{lang === 'hi' ? t.hindi : t.english}</div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, paddingLeft: 46 }}>
-                {[{ code: 'en', label: t.english }, { code: 'hi', label: t.hindi }, { code: 'zh', label: t.mandarin }].map(({ code, label }) => (
+                {[{ code: 'en', label: t.english }, { code: 'hi', label: t.hindi }].map(({ code, label }) => (
                   <button key={code} onClick={() => setLang(code)} style={{
                     flex: 1, padding: '8px 4px', borderRadius: 7, border: 'none', cursor: 'pointer',
                     fontWeight: 600, fontSize: 13, fontFamily: 'inherit',

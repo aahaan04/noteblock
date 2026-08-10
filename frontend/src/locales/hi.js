@@ -98,7 +98,6 @@ export default {
   language: 'भाषा',
   english: 'English',
   hindi: 'हिंदी',
-  mandarin: '中文',
   save: 'सहेजें',
   saved: 'सहेजा गया!',
   chooseLanguage: 'अपनी भाषा चुनें',

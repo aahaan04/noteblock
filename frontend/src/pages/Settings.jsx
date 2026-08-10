@@ -81,7 +81,7 @@ export default function Settings() {
           {t.language}
         </label>
         <div style={{ display: 'flex', gap: 10 }}>
-          {[{ code: 'en', label: t.english }, { code: 'hi', label: t.hindi }, { code: 'zh', label: t.mandarin }].map(({ code, label }) => (
+          {[{ code: 'en', label: t.english }, { code: 'hi', label: t.hindi }].map(({ code, label }) => (
             <button key={code} onClick={() => setLang(code)} style={{
               flex: 1, padding: 12, borderRadius: 7, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 15,
               background: lang === code ? '#FF6B35' : 'var(--bg-card)',

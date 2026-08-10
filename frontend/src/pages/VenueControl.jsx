@@ -518,7 +518,7 @@ export default function VenueControl() {
         <div style={{ background: '#2A1408', border: '1px solid #FF6B35', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
           <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
           <span style={{ fontSize: 12, color: 'var(--credits)', fontWeight: 600, lineHeight: 1.4 }}>
-            Player is still loading — it&apos;ll start automatically the moment it&apos;s ready, no need to click again.
+            Player is still loading. It&apos;ll start automatically the moment it&apos;s ready, no need to click again.
           </span>
         </div>
       )}
@@ -526,7 +526,7 @@ export default function VenueControl() {
         <div style={{ background: '#2A1408', border: '1px solid #FF6B35', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
           <AlertTriangle size={18} color="#FF6B35" style={{ flexShrink: 0 }} />
           <span style={{ fontSize: 12, color: 'var(--credits)', fontWeight: 600, lineHeight: 1.4 }}>
-            Nothing to play yet — the queue is empty and Vibe Mode has no videos loaded. Check the Vibe tab.
+            Nothing to play yet. The queue is empty and Vibe Mode has no videos loaded. Check the Vibe tab.
           </span>
         </div>
       )}
@@ -534,7 +534,7 @@ export default function VenueControl() {
         <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, margin: '0' }}>
           <AlertTriangle size={18} color="#f87171" style={{ flexShrink: 0 }} />
           <span style={{ fontSize: 12, color: '#f87171', fontWeight: 600, lineHeight: 1.4 }}>
-            The player hasn&apos;t finished loading after 10+ seconds — this usually means an ad blocker or network filter is blocking YouTube embeds. Try disabling it for this site, or refresh the page.
+            The player hasn&apos;t finished loading after 10+ seconds. This usually means an ad blocker or network filter is blocking YouTube embeds. Try disabling it for this site, or refresh the page.
           </span>
         </div>
       )}
@@ -927,7 +927,7 @@ function VibeSettings({ venue, venueId, token, onUpdate, onVenueRefresh, vibePla
             </div>
           ) : vibeVideoCount === 0 ? (
             <div style={{ marginTop: 12, background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.3)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              No Vibe Mode videos loaded yet — Start won&apos;t have anything to play until the queue has a request or this finds videos. Check your Vibe Source below.
+              No Vibe Mode videos loaded yet. Start won&apos;t have anything to play until the queue has a request or this finds videos. Check your Vibe Source below.
             </div>
           ) : (
             <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
