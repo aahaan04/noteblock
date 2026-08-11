@@ -20,7 +20,7 @@ const RESEND_COOLDOWN_SECS = 30;
 //              logging in fresh (no new session is issued in that case)
 //   onDone   — ({ isNewUser }) => void, called once the whole flow succeeds
 export default function PhoneAuthFlow({ role, linking = false, onDone }) {
-  const { sendOtp, verifyOtp, linkPhone, refreshProfile } = useAuth();
+  const { sendOtp, verifyOtp, linkPhone, refreshProfile, hydrateSession } = useAuth();
   const { t } = useLang();
 
   const [phase, setPhase] = useState('phone'); // 'phone' | 'otp' | 'name'
@@ -55,7 +55,19 @@ export default function PhoneAuthFlow({ role, linking = false, onDone }) {
     setError('');
     setSubmitting(true);
     try {
-      await sendOtp(validE164);
+      const result = await sendOtp(validE164);
+      // TEMP TEST BYPASS (backend/src/routes/auth.js): the backend already
+      // issued a real session for the fixed test guest account instead of
+      // sending a code — skip the OTP screen entirely. Never applies while
+      // linking a phone to an already-logged-in session (that's a different
+      // account than this bypass would produce), so a real Twilio attempt
+      // still happens there instead — which will just fail cleanly with the
+      // normal "couldn't send a code" message for this fake number.
+      if (result?.bypass && !linking) {
+        await hydrateSession(result);
+        onDone?.({ isNewUser: false });
+        return;
+      }
       setPhoneE164(validE164);
       setPhase('otp');
       startCooldown();

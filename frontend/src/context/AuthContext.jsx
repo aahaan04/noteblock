@@ -83,9 +83,21 @@ export function AuthProvider({ children }) {
   }
 
   // Sends a 6-digit SMS OTP via the backend (Twilio Verify). No session
-  // exists yet at this point — this is just the "send code" step.
+  // exists yet at this point — this is just the "send code" step. Returns
+  // the backend's response so the caller can detect the TEMP TEST BYPASS
+  // (backend/src/routes/auth.js) — for that one fixed test number, the
+  // backend skips Twilio and returns a real session right here instead of
+  // just "code sent", so there's no OTP step to go through at all.
   async function sendOtp(phoneNumber) {
-    await api.auth.otpStart({ phone_number: phoneNumber });
+    return await api.auth.otpStart({ phone_number: phoneNumber });
+  }
+
+  // Hydrates a Supabase session from an { access_token, refresh_token } pair
+  // returned by the backend — shared by the normal OTP-verified login path
+  // and the test bypass, so both end up in an identical, fully real session.
+  async function hydrateSession({ access_token, refresh_token }) {
+    const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+    if (error) throw error;
   }
 
   // Checks the code. If this succeeds while the caller is NOT already logged
@@ -96,11 +108,7 @@ export function AuthProvider({ children }) {
   // prompt for a display name.
   async function verifyOtp(phoneNumber, code, { role } = {}) {
     const result = await api.auth.otpVerify({ phone_number: phoneNumber, code, role });
-    const { error } = await supabase.auth.setSession({
-      access_token: result.access_token,
-      refresh_token: result.refresh_token,
-    });
-    if (error) throw error;
+    await hydrateSession(result);
     return result;
   }
 
@@ -136,7 +144,7 @@ export function AuthProvider({ children }) {
       profile,
       token,
       loading,
-      sendOtp, verifyOtp, linkPhone, signOut, refreshProfile,
+      sendOtp, verifyOtp, linkPhone, signOut, refreshProfile, hydrateSession,
     }}>
       {children}
     </AuthContext.Provider>
