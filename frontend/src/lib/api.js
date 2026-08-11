@@ -1,11 +1,32 @@
+import { supabase } from './supabase.js';
+
 const BASE = import.meta.env.VITE_API_URL ?? '';
 
-async function request(path, options = {}, token = null) {
+async function doFetch(path, options, token) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers ?? {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
   const data = await res.json().catch(() => ({}));
+  return { res, data };
+}
+
+// supabase-js's own autoRefreshToken relies on a JS timer firing *before*
+// the access token expires - which doesn't happen while the tab is
+// backgrounded or the device is asleep (those timers don't run). The first
+// request after coming back can land with an access token that's already
+// expired, which the backend correctly rejects as 401 "Invalid token" - a
+// real, valid session, just a stale token. Without this retry, that surfaced
+// directly to the user (e.g. gifting credits) instead of quietly recovering.
+async function request(path, options = {}, token = null) {
+  let { res, data } = await doFetch(path, options, token);
+
+  if (res.status === 401 && token && (data.error === 'Invalid token' || data.error === 'Missing token')) {
+    const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+    if (!refreshErr && refreshed?.session?.access_token) {
+      ({ res, data } = await doFetch(path, options, refreshed.session.access_token));
+    }
+  }
+
   if (!res.ok) throw Object.assign(new Error(data.error ?? 'Request failed'), { status: res.status, data });
   return data;
 }
