@@ -4,3 +4,7 @@ dist/
 .env.*
 *.local
 .DS_Store
+
+# Claude Code local-only state (never commit). Note: *.local above does NOT match *.local.json
+.claude/settings.local.json
+.claude/worktrees/
