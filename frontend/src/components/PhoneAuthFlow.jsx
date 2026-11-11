@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, HelpCircle } from 'lucide-react';
 import PhoneInput, { toE164 } from './PhoneInput.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
@@ -33,6 +33,22 @@ export default function PhoneAuthFlow({ role, linking = false, onDone }) {
   const [submitting, setSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const cooldownRef = useRef(null);
+
+  // Small "?" popover explaining the TEMP TEST BYPASS (backend/src/routes/auth.js).
+  // Remove this together with that bypass. Guest login only: the bypass always
+  // produces a guest session, so showing it on the host login or the
+  // link-your-phone prompt would point people at something that doesn't apply.
+  const showTestHelp = role !== 'host' && !linking;
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef(null);
+  useEffect(() => {
+    if (!helpOpen) return;
+    const onDown = (e) => { if (helpRef.current && !helpRef.current.contains(e.target)) setHelpOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setHelpOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [helpOpen]);
 
   useEffect(() => () => clearInterval(cooldownRef.current), []);
 
@@ -196,9 +212,39 @@ export default function PhoneAuthFlow({ role, linking = false, onDone }) {
 
   return (
     <form onSubmit={handleSendCode} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 4px', lineHeight: 1.5 }}>
-        {t.phoneAuthNote}
-      </p>
+      <div ref={helpRef} style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <p style={{ flex: 1, color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 4px', lineHeight: 1.5 }}>
+          {t.phoneAuthNote}
+        </p>
+        {showTestHelp && (
+          <>
+            <button
+              type="button"
+              onClick={() => setHelpOpen(o => !o)}
+              aria-label={t.testHelpLabel}
+              aria-expanded={helpOpen}
+              title={t.testHelpLabel}
+              style={{
+                flexShrink: 0, width: 24, height: 24, padding: 0, borderRadius: '50%', border: 'none',
+                background: 'transparent', color: helpOpen ? '#FF6B35' : 'var(--text-muted)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <HelpCircle size={18} />
+            </button>
+            {helpOpen && (
+              <div role="note" style={{
+                position: 'absolute', top: 'calc(100% + 2px)', right: 0, zIndex: 20, width: '100%', maxWidth: 320,
+                background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10,
+                padding: '12px 14px', boxShadow: '0 8px 24px rgba(0,0,0,0.35)', textAlign: 'left',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{t.testHelpTitle}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{t.testHelpBody}</div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
       <PhoneInput country={country} onCountryChange={setCountry} value={nationalNumber} onChange={setNationalNumber} autoFocus />
       {error && <p style={{ color: '#f87171', fontSize: 13, margin: 0 }}>{error}</p>}
       <button className="btn-primary" type="submit" disabled={!validE164 || submitting} style={{ padding: 14, fontSize: 15 }}>

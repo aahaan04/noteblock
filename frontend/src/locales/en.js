@@ -14,6 +14,9 @@ export default {
 
   // Phone + SMS OTP auth
   phoneAuthNote: "Enter your phone number and we'll send you a 6-digit code by SMS. No password needed.",
+  testHelpLabel: 'Help signing in',
+  testHelpTitle: 'Having trouble signing in?',
+  testHelpBody: "We're still in testing, so text messages may not always arrive. If your code doesn't show up, enter 9999999999 as your number to continue as a test guest.",
   sendCode: 'Send Code',
   sendingCode: 'Sending…',
   otpSentTo: 'We sent a 6-digit code to',
